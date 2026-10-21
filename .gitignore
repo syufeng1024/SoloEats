@@ -1,0 +1,24 @@
+# 本地密钥
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Java / Maven
+target/
+*.class
+*.jar
+*.war
+logs/
+*.log
+
+# Node / 前端
+node_modules/
+dist/
+.DS_Store
+
+# Docker 本地数据（如果改为 bind mount）
+data/

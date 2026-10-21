@@ -1,0 +1,143 @@
+package com.soloeats.delivery.service.impl;
+
+import com.soloeats.common.exception.BizException;
+import com.soloeats.common.exception.ErrorCode;
+import com.soloeats.delivery.domain.entity.DeliveryOrder;
+import com.soloeats.delivery.domain.entity.RiderIncome;
+import com.soloeats.delivery.domain.enums.DeliveryOrderStatus;
+import com.soloeats.delivery.mapper.DeliveryOrderMapper;
+import com.soloeats.delivery.mapper.RiderIncomeMapper;
+import com.soloeats.delivery.service.DeliveryService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Objects;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class DeliveryServiceImpl implements DeliveryService {
+
+    private final DeliveryOrderMapper deliveryOrderMapper;
+    private final RiderIncomeMapper riderIncomeMapper;
+
+    @Override
+    public DeliveryOrder getByOrderId(Long orderId) {
+        return deliveryOrderMapper.findByOrderId(orderId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void createForOrder(Long orderId, Long shopId, String pickupAddress,
+                               String receiverAddress, BigDecimal receiverLng,
+                               BigDecimal receiverLat, Long deliveryFee) {
+        if (deliveryOrderMapper.findByOrderId(orderId) != null) {
+            return;
+        }
+        DeliveryOrder delivery = new DeliveryOrder();
+        delivery.setDeliveryNo(generateDeliveryNo());
+        delivery.setOrderId(orderId);
+        delivery.setShopId(shopId);
+        delivery.setStatus(DeliveryOrderStatus.WAIT_ASSIGN.getCode());
+        delivery.setPickupAddress(pickupAddress);
+        delivery.setReceiverAddress(receiverAddress);
+        delivery.setReceiverLng(receiverLng);
+        delivery.setReceiverLat(receiverLat);
+        delivery.setDeliveryFee(deliveryFee == null ? 0L : deliveryFee);
+        delivery.setDispatchCount(0);
+        deliveryOrderMapper.insert(delivery);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DeliveryOrder accept(Long orderId, Long riderId) {
+        DeliveryOrder existing = requireDelivery(orderId);
+        if (Objects.equals(existing.getStatus(), DeliveryOrderStatus.ACCEPTED.getCode())
+                && Objects.equals(existing.getRiderId(), riderId)) {
+            return existing;
+        }
+
+        int rows = deliveryOrderMapper.accept(orderId, riderId);
+        if (rows != 1) {
+            DeliveryOrder latest = requireDelivery(orderId);
+            if (latest.getRiderId() != null && !Objects.equals(latest.getRiderId(), riderId)) {
+                throw new BizException(ErrorCode.DISPATCH_TAKEN);
+            }
+            throw new BizException(ErrorCode.DELIVERY_STATE_INVALID);
+        }
+        return requireDelivery(orderId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DeliveryOrder pickup(Long orderId, Long riderId) {
+        int rows = deliveryOrderMapper.pickup(orderId, riderId);
+        if (rows != 1) {
+            throwDeliveryState(orderId, riderId);
+        }
+        return requireDelivery(orderId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DeliveryOrder deliver(Long orderId, Long riderId) {
+        DeliveryOrder existing = requireDelivery(orderId);
+        if (Objects.equals(existing.getStatus(), DeliveryOrderStatus.DELIVERED.getCode())) {
+            if (!Objects.equals(existing.getRiderId(), riderId)) {
+                throw new BizException(ErrorCode.DELIVERY_RIDER_MISMATCH);
+            }
+            return existing;
+        }
+
+        int rows = deliveryOrderMapper.delivered(orderId, riderId);
+        if (rows != 1) {
+            throwDeliveryState(orderId, riderId);
+        }
+
+        DeliveryOrder delivered = requireDelivery(orderId);
+        long fee = delivered.getDeliveryFee() == null ? 0L : delivered.getDeliveryFee();
+        RiderIncome income = new RiderIncome();
+        income.setRiderId(riderId);
+        income.setDeliveryOrderId(delivered.getId());
+        income.setOrderId(orderId);
+        income.setBaseFee(fee);
+        income.setDistanceFee(0L);
+        income.setTimeSubsidy(0L);
+        income.setWeatherSubsidy(0L);
+        income.setTipAmount(0L);
+        income.setPenaltyAmount(0L);
+        income.setCompensationAmount(0L);
+        income.setTotalAmount(fee);
+        income.setSettlementDate(LocalDate.now());
+        income.setStatus(0);
+        riderIncomeMapper.insert(income);
+        return delivered;
+    }
+
+    private DeliveryOrder requireDelivery(Long orderId) {
+        DeliveryOrder delivery = deliveryOrderMapper.findByOrderId(orderId);
+        if (delivery == null) {
+            throw new BizException(ErrorCode.DELIVERY_NOT_FOUND);
+        }
+        return delivery;
+    }
+
+    private void throwDeliveryState(Long orderId, Long riderId) {
+        DeliveryOrder latest = requireDelivery(orderId);
+        if (!Objects.equals(latest.getRiderId(), riderId)) {
+            throw new BizException(ErrorCode.DELIVERY_RIDER_MISMATCH);
+        }
+        throw new BizException(ErrorCode.DELIVERY_STATE_INVALID);
+    }
+
+    private String generateDeliveryNo() {
+        String time = DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now());
+        String random = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        return "DL" + time + random;
+    }
+}

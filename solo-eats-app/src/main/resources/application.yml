@@ -1,0 +1,163 @@
+# ============================================================
+# 数创星光外卖 - Spring Boot 主配置
+# 本地开发：从项目根目录或 solo-eats-app 目录运行均可读取 .env
+# 生产环境：所有密码、JWT 密钥必须由环境变量或配置中心注入
+# ============================================================
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 20
+    accept-count: 100
+    max-connections: 8192
+
+spring:
+  application:
+    name: solo-eats
+  config:
+    import:
+      - optional:file:./.env[.properties]
+      - optional:file:../.env[.properties]
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: "jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:solo_eats}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true"
+    username: ${MYSQL_USER:solo}
+    password: ${MYSQL_PASSWORD:change_me_mysql}
+    hikari:
+      pool-name: SoloEatsHikari
+      maximum-pool-size: ${DB_POOL_MAX:20}
+      minimum-idle: ${DB_POOL_MIN:5}
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      validation-timeout: 5000
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:change_me_redis}
+      database: ${REDIS_DB:0}
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 3000ms
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:solo}
+    password: ${RABBITMQ_PASSWORD:change_me_rabbitmq}
+    virtual-host: "${RABBITMQ_VHOST:/}"
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    listener:
+      simple:
+        acknowledge-mode: auto
+        prefetch: 20
+        concurrency: 2
+        max-concurrency: 8
+        retry:
+          enabled: true
+          initial-interval: 1000ms
+          max-attempts: 3
+          multiplier: 2
+
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    locations: ${FLYWAY_LOCATIONS:classpath:db/migration}
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    table: flyway_schema_history
+
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+    serialization:
+      write-dates-as-timestamps: false
+      fail-on-empty-beans: false
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.soloeats
+  configuration:
+    map-underscore-to-camel-case: true
+    cache-enabled: false
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+  health:
+    redis:
+      enabled: true
+    rabbit:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.soloeats: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-}] %logger{40} - %msg%n"
+
+app:
+  rate-limit:
+    order-create:
+      limit: ${RATE_LIMIT_ORDER_CREATE:20}
+      window-seconds: 60
+    payment-pay:
+      limit: ${RATE_LIMIT_PAYMENT_PAY:20}
+      window-seconds: 60
+    auth-login:
+      limit: ${RATE_LIMIT_AUTH_LOGIN:10}
+      window-seconds: 60
+  jwt:
+    secret: ${JWT_SECRET:change_me_change_me_change_me_32bytes}
+    expire-minutes: ${JWT_EXPIRE_MINUTES:120}
+  order:
+    pay-timeout-minutes: ${ORDER_PAY_TIMEOUT_MINUTES:15}
+    timeout-delay-seconds: ${ORDER_TIMEOUT_DELAY_SECONDS:900}
+    merchant-accept-timeout-minutes: ${ORDER_ACCEPT_TIMEOUT_MINUTES:10}
+    after-sales-days: ${ORDER_AFTER_SALES_DAYS:7}
+    auto-complete-hours: ${ORDER_AUTO_COMPLETE_HOURS:24}
+  payment:
+    callback-secret: ${PAYMENT_CALLBACK_SECRET:change_me_payment_callback_secret}
+  pickup:
+    timeout-minutes: ${PICKUP_TIMEOUT_MINUTES:120}
+  dispatch:
+    expire-seconds: ${DISPATCH_EXPIRE_SECONDS:15}
+    max-retry: ${DISPATCH_MAX_RETRY:3}
+  settlement:
+    bill-cron: "${SETTLEMENT_BILL_CRON:0 0 2 * * ?}"
+    default-commission-rate: ${DEFAULT_COMMISSION_RATE:0.0600}
+  idempotency:
+    ttl-hours: ${IDEMPOTENCY_TTL_HOURS:24}
+  minio:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ROOT_USER:change_me_minio}
+    secret-key: ${MINIO_ROOT_PASSWORD:change_me_minio_secret}
+    bucket: ${MINIO_BUCKET:solo-eats}
+    secure: ${MINIO_SECURE:false}
