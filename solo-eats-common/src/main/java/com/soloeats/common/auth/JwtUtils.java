@@ -28,6 +28,14 @@ public class JwtUtils {
     }
 
     public String issue(UserPrincipal principal) {
+        return issue(principal, null, null);
+    }
+
+    /**
+     * 账号密码登录使用：除 UserPrincipal 已有字段外，额外写入 tenantId / username。
+     * 权限码不进 JWT（数量大，阶段C 写 Redis perm:user:{userId}）。
+     */
+    public String issue(UserPrincipal principal, Long tenantId, String username) {
         Date now = new Date();
         JwtBuilder builder = Jwts.builder()
                 .subject(principal.userId() == null ? "anonymous" : String.valueOf(principal.userId()))
@@ -46,6 +54,12 @@ public class JwtUtils {
         }
         if (principal.riderId() != null) {
             builder.claim("riderId", principal.riderId());
+        }
+        if (tenantId != null) {
+            builder.claim("tenantId", tenantId);
+        }
+        if (username != null && !username.isBlank()) {
+            builder.claim("username", username);
         }
         return builder.signWith(key).compact();
     }

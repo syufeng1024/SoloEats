@@ -1,0 +1,218 @@
+# T02 system-租户 · 组织 · 审计日志 · 通知
+
+> 优先级：**P0**（租户/部门/岗位/字典/操作日志）；**P1**（邮件、公告）
+> 所属模块：`solo-eats-system` + `solo-eats-app`
+> 分两段：**阶段A（租户/套餐/部门/岗位/字典）→ 阶段B（操作日志/登录日志/邮件/公告）**
+
+---
+
+## 目标
+
+**一句话**：让"多租户隔离"从一句口号变成一行代码——`TenantContext.get()` 自动给所有新表写 `tenant_id`、自动在查询上加 `tenant_id` 过滤，同时把后台每一次写操作变成可追溯的审计日志。
+
+**完成后系统能做什么**
+1. 新增/查询业务数据时无需手写 `tenant_id`，由 `TenantLineInnerInterceptor` + `TenantContext` 自动完成，跨租户读写直接查不到/写不进。
+2. 平台可以创建租户、绑定套餐（可访问菜单范围 + 有效期），到期自动失效。
+3. 部门（组织树）+ 岗位可选配到 `t_sys_user.dept_id/post_id`，数据字典供全站枚举复用。
+4. 每次带 `@OperationLog` 的写接口自动落一条操作日志（谁、什么时间、什么 IP、请求参数摘要、耗时、结果码）。
+5. 登录成功/失败都落登录日志，支持按用户/时间/IP 检索。
+6. 平台可发公告（富文本），站内已读统计；可配置 SMTP 邮件账号与模板并落发送日志。
+
+---
+
+## 规格书依据
+
+| 章节 | 原文要点 |
+|---|---|
+| 4.12 系统管理 | 「部门与岗位：组织架构、岗位管理；字典与地区：数据字典、省市区行政数据；租户与套餐：租户（平台/商家）、套餐可访问范围、有效期；通知公告：公告发布与已读统计；邮件管理：邮箱账号（SMTP）、邮件模板、邮件日志；日志中心：登录日志、操作日志、API 访问日志、API 错误日志」 |
+| 2.1 系统构成 | 「四个前端共用同一套后端服务与权限模型，通过角色与 `merchant_id`/`shop_id` 做数据隔离」 |
+| 3.2 权限模型 | 数据权限范围 5 档（全平台/本租户/本商家/本门店/本人），由部门树与租户共同决定可见范围 |
+| 9.3 安全 | 「数据脱敏与操作审计；日志留存练手环境 ≥ 30 天」 |
+| 1.6 P0 范围 | 「支撑：RBAC、**多租户隔离**、MinIO、WebSocket 消息…」 |
+
+---
+
+## 前置依赖
+
+| 依赖 | 具体依赖物 |
+|---|---|
+| **T01 阶段A/B** | `SysUser`/`SysRole`/`SysMenu` 实体与 Mapper；`AuthService`；`UserPrincipal.tenantId`（T01-C 已加） |
+| **T01 阶段C** | `RequirePermission` 注解、`PermissionCache`（本卡的菜单范围校验复用它） |
+| 既有表 | `t_sys_user`（补 `dept_id`/`post_id` 外键语义，另需 `t_sys_tenant`/`t_sys_dept`/`t_sys_post`/`t_sys_dict_type`/`t_sys_dict_item`） |
+| 既有配置 | `application.yml` 的 `spring.mail.*`（**当前没有，需要新增**）、`app.jwt` |
+
+---
+
+## 数据模型
+
+迁移脚本：`V5__system_tenant_org_dict.sql`（阶段A）、`V6__system_log_mail_notice.sql`（阶段B）
+
+### 阶段A：5 张表
+
+| 表 | 关键字段 | 索引/唯一键 |
+|---|---|---|
+| `t_sys_tenant` | id, tenant_code varchar(64), tenant_name, tenant_type tinyint(1平台 2商家), merchant_id, package_id, status(0启用 1停用 2过期), expire_at, contact_name, contact_phone, created_at/updated_at/deleted | `uk_tenant_code(tenant_code)` |
+| `t_sys_package` | id, package_code, package_name, menu_ids json（可访问菜单范围）, max_shop int, max_user int, price bigint(分), valid_days int, status, remark, 审计字段 | `uk_package_code(package_code)` |
+| `t_sys_dept` | id, tenant_id, parent_id, ancestors varchar(512)（祖级路径 `0,1,3`）, dept_name, leader, phone, sort, status, 审计字段 | `idx_parent(parent_id)`、`idx_ancestors(ancestors)` |
+| `t_sys_post` | id, tenant_id, post_code, post_name, sort, status, remark, 审计字段 | `uk_tenant_post(tenant_id, post_code)` |
+| `t_sys_dict_type` | id, tenant_id, dict_type varchar(64), dict_name, status, remark, 审计字段 | `uk_tenant_dict_type(tenant_id, dict_type)` |
+| `t_sys_dict_item` | id, tenant_id, dict_type, dict_label, dict_value, dict_sort, css_class, is_default tinyint, status, remark, 审计字段 | `idx_type_sort(dict_type, dict_sort)` |
+
+> 字典项也走 `deleted` 逻辑删除；`is_default=1` 在同一 `dict_type` 内最多 1 条（应用层保证，不建约束）。
+
+### 阶段B：5 张表
+
+| 表 | 关键字段 | 索引 |
+|---|---|---|
+| `t_sys_oper_log` | id, tenant_id, trace_id, module varchar(32), action varchar(32), method varchar(255), request_uri, request_method, request_params json（**脱敏后**）, operator_id, operator_name, operator_type, ip varchar(64), ua varchar(512), result_code int, error_msg varchar(512), cost_ms int, created_at | `idx_operator_time(operator_id, created_at)`、`idx_module_time(module, created_at)`、`idx_trace(trace_id)` |
+| `t_sys_login_log` | id, tenant_id, user_id, username, login_type tinyint(1密码 2验证码 3mock), success tinyint, fail_reason varchar(128), ip, ua, created_at | `idx_user_time(user_id, created_at)`、`idx_time(created_at)` |
+| `t_sys_mail_account` | id, tenant_id, account_name, host, port, username, password_cipher, from_addr, ssl tinyint, status, 审计字段 | `uk_tenant_account(tenant_id, account_name)` |
+| `t_sys_mail_template` | id, tenant_id, template_code, template_name, subject, content text, status, 审计字段 | `uk_tenant_tpl(tenant_id, template_code)` |
+| `t_sys_mail_log` | id, tenant_id, template_code, to_addr, subject, content text, status tinyint(0待发 1成功 2失败), error_msg, sent_at, created_at | `idx_status_time(status, created_at)` |
+| `t_sys_notice` | id, tenant_id, title, content longtext, notice_type tinyint(1公告 2通知), target_type tinyint(1全部 2平台 3商家 4骑手), status tinyint(0草稿 1已发布 2已撤回), publish_at, expire_at, read_count int, 审计字段 | `idx_status_publish(status, publish_at)` |
+
+---
+
+## 接口清单
+
+| # | 方法 | 路径 | 要点 | 权限 |
+|---|---|---|---|---|
+| 1 | GET | `/api/v1/admin/tenants` | `tenantType,status,keyword,pageNum,pageSize` → `PageResult<TenantView>` | `system:tenant:list` |
+| 2 | POST | `/api/v1/admin/tenants` | `{tenantCode,tenantName,tenantType,merchantId,packageId,expireAt,contactName,contactPhone}` | `system:tenant:create` |
+| 3 | PUT | `/api/v1/admin/tenants/{id}` | 同上 | `system:tenant:update` |
+| 4 | PUT | `/api/v1/admin/tenants/{id}/status` | `{status}` | `system:tenant:update` |
+| 5 | GET | `/api/v1/admin/packages` | 套餐列表 | `system:package:list` |
+| 6 | POST/PUT | `/api/v1/admin/packages`、`/{id}` | `{packageCode,packageName,menuIds[],maxShop,maxUser,price,validDays}` | `system:package:*` |
+| 7 | GET | `/api/v1/admin/depts/tree` | 部门树 | `system:dept:list` |
+| 8 | POST/PUT/DELETE | `/api/v1/admin/depts`、`/{id}` | `{parentId,deptName,leader,phone,sort,status}`；删除前校验无子节点、无用户 | `system:dept:*` |
+| 9 | GET | `/api/v1/admin/posts` | 岗位分页 | `system:post:list` |
+| 10 | POST/PUT/DELETE | `/api/v1/admin/posts`、`/{id}` | `{postCode,postName,sort,status,remark}` | `system:post:*` |
+| 11 | GET | `/api/v1/admin/dicts` | 字典类型分页 | `system:dict:list` |
+| 12 | GET | `/api/v1/admin/dicts/{dictType}/items` | **免登录可读**（前端渲染枚举） | 白名单 |
+| 13 | POST/PUT/DELETE | `/api/v1/admin/dicts`、`/items` | 字典类型 & 字典项维护 | `system:dict:*` |
+| 14 | GET | `/api/v1/admin/logs/oper` | `module,operatorId,resultCode,dateFrom,dateTo,pageNum,pageSize` | `system:log:oper:list` |
+| 15 | GET | `/api/v1/admin/logs/login` | `username,success,dateFrom,dateTo,pageNum,pageSize` | `system:log:login:list` |
+| 16 | GET | `/api/v1/admin/mails/accounts` | 邮件账号列表 | `system:mail:list` |
+| 17 | POST/PUT | `/api/v1/admin/mails/accounts`、`/{id}` | `{host,port,username,password,fromAddr,ssl}`；密码加密入库 | `system:mail:update` |
+| 18 | POST | `/api/v1/admin/mails/test` | `{accountId,toAddr}` 发测试邮件 | `system:mail:test` |
+| 19 | GET | `/api/v1/admin/mails/logs` | 邮件日志分页 | `system:mail:list` |
+| 20 | GET | `/api/v1/admin/notices` | 公告分页 | `system:notice:list` |
+| 21 | POST/PUT | `/api/v1/admin/notices`、`/{id}` | `{title,content,noticeType,targetType,publishAt,expireAt}` | `system:notice:*` |
+| 22 | PUT | `/api/v1/admin/notices/{id}/publish` | 发布 / 撤回 | `system:notice:update` |
+| 23 | GET | `/api/v1/c/notices` | 用户端可见公告（已发布+未过期） | 登录即可 |
+| 24 | PUT | `/api/v1/c/notices/{id}/read` | 标记已读（`read_count` 自增） | 登录即可 |
+
+---
+
+## 需要新增/修改的文件
+
+### 阶段A（17 个）
+
+| 类型 | 路径 |
+|---|---|
+| 新 | `solo-eats-app/src/main/resources/db/migration/V5__system_tenant_org_dict.sql` |
+| 新 | `solo-eats-system/src/main/java/com/soloeats/system/domain/entity/SysTenant.java`、`SysPackage.java`、`SysDept.java`、`SysPost.java`、`SysDictType.java`、`SysDictItem.java`（6） |
+| 新 | `solo-eats-system/src/main/java/com/soloeats/system/mapper/` 下 6 个 Mapper |
+| 新 | `solo-eats-system/src/main/java/com/soloeats/system/tenant/TenantContext.java`（ThreadLocal，含 `get()/set()/clear()`、`DEFAULT_TENANT_ID=1`） |
+| 新 | `solo-eats-system/src/main/java/com/soloeats/system/tenant/TenantFilter.java`（从 `AuthContext` 取 `tenantId` 写入 `TenantContext`，`finally` 清理） |
+| 新 | `solo-eats-system/src/main/java/com/soloeats/system/service/SysTenantService.java` + `impl` |
+| 新 | `solo-eats-system/src/main/java/com/soloeats/system/service/SysOrgService.java` + `impl`（部门 + 岗位） |
+| 新 | `solo-eats-system/src/main/java/com/soloeats/system/service/SysDictService.java` + `impl` |
+| 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminTenantController.java`、`AdminDeptController.java`、`AdminPostController.java`、`AdminDictController.java`（4） |
+| 改 | `solo-eats-app/src/main/java/com/soloeats/app/config/MybatisPlusConfig.java`（注册 `TenantLineInnerInterceptor`，忽略表白名单：`t_sys_tenant`、`t_sys_menu`、`t_sys_package`、`t_idempotency`、`t_outbox_event`、`flyway_schema_history`） |
+
+### 阶段B（17 个）
+
+| 类型 | 路径 |
+|---|---|
+| 新 | `solo-eats-app/src/main/resources/db/migration/V6__system_log_mail_notice.sql` |
+| 新 | `solo-eats-system/src/main/java/com/soloeats/system/domain/entity/SysOperLog.java`、`SysLoginLog.java`、`SysMailAccount.java`、`SysMailTemplate.java`、`SysMailLog.java`、`SysNotice.java`（6） |
+| 新 | 对应 6 个 Mapper |
+| 新 | `solo-eats-common/src/main/java/com/soloeats/common/log/OperationLog.java`（注解：`module()`、`action()`、`recordParams()`） |
+| 新 | `solo-eats-common/src/main/java/com/soloeats/common/log/OperationLogAspect.java`（`@Around`，异步落库，参数脱敏：`password|phone|idCard|bankAccount` → `***`） |
+| 新 | `solo-eats-system/src/main/java/com/soloeats/system/service/SysLogService.java` + `impl` |
+| 新 | `solo-eats-system/src/main/java/com/soloeats/system/service/SysMailService.java` + `impl`（`JavaMailSender`） |
+| 新 | `solo-eats-system/src/main/java/com/soloeats/system/service/SysNoticeService.java` + `impl` |
+| 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminLogController.java`、`AdminMailController.java`、`AdminNoticeController.java`、`NoticeClientController.java`（4） |
+| 改 | `solo-eats-app/src/main/resources/application.yml`（`spring.mail.host/port/username/password/properties.mail.smtp.auth`，全部走 `${MAIL_*:}` 环境变量；`app.auth.mock-login-enabled`、`app.tenant.enabled`） |
+| 改 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AuthController.java`（登录成功/失败写 `t_sys_login_log`） |
+
+---
+
+## 关键实现约束
+
+| 项 | 约束 |
+|---|---|
+| **租户隔离方式** | 用 MyBatis-Plus `TenantLineInnerInterceptor`，**不要**在每个 Mapper XML 手写 `tenant_id = ?`。`tenant_id` 取值来源优先级：`TenantContext.get()` → 请求头 `X-Tenant-Id`（仅 ADMIN）→ 默认 1 |
+| **历史表不补列** | `t_order`/`t_sku`/`t_payment_order`/`t_settlement_bill`/`t_user_coupon` 等 **21 张既有表不加 `tenant_id`**（见 README Q1），隔离靠 `merchant_id/shop_id`。因此 `TenantLineInnerInterceptor` 的忽略表必须显式列出这些表，否则会报 `Unknown column 'tenant_id'` |
+| **事务** | `TenantContext` 在 Filter 中 set/clear，与事务无关；**禁止**在 `@Async` 线程里直接依赖 ThreadLocal（需要显式传递，`TraceTaskDecorator` 已提供范式，可复用） |
+| **日志异步** | `OperationLogAspect` 用 `@Async` + `AsyncConfig` 已有线程池；落库失败只 `log.warn`，**不得**影响主流程；参数落库前必须脱敏并截断到 2000 字符 |
+| **日志不入日志表** | `/api/v1/admin/logs/**` 自身**不记**操作日志（避免日志风暴），用切面内 URI 前缀排除 |
+| **部门树** | `ancestors` 采用 `0,1,3` 形式；移动部门时级联更新子部门 `ancestors`（同一事务）；删除前必须校验无子部门且无用户引用 |
+| **字典缓存** | `dictType → items` 缓存 Redis `dict:{tenantId}:{dictType}`，TTL 1h；字典项变更时主动 `DEL` |
+| **邮件密码** | `password_cipher` 用 AES-GCM 加密，密钥 `app.crypto.mail-key`（环境变量 `MAIL_KEY`），**禁止明文**；日志中不得出现 |
+| **公告已读** | P0 只维护 `read_count`；按用户级已读明细（`t_sys_notice_read`）放 P1，本卡不建 |
+| **套餐限制** | `max_shop`/`max_user` 只在"创建门店/创建账号"时做**软校验**（超限返回 `PARAM_INVALID` 带说明），不做硬拦截 |
+| **登录日志** | 失败也要落（含 `fail_reason`）；同一 IP 1 分钟内失败 > 5 次 → 后续返回 `10006 AUTH_ACCOUNT_LOCKED`（用 Redis 计数，TTL 10min） |
+
+---
+
+## 验收标准
+
+```bash
+mvn -q -pl solo-eats-system -am compile
+mvn -q -DskipTests package
+
+TOKEN=<admin token>
+
+# 租户
+curl -s -X POST http://localhost:8080/api/v1/admin/tenants -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"tenantCode":"M0001","tenantName":"示例餐饮","tenantType":2,"packageId":1,"expireAt":"2027-12-31 23:59:59"}'
+# 断言：code=0；返回 id
+
+# 部门树
+curl -s -X POST http://localhost:8080/api/v1/admin/depts -H "Authorization: Bearer $TOKEN" -d '{"parentId":0,"deptName":"运营中心","sort":1}'
+curl -s http://localhost:8080/api/v1/admin/depts/tree -H "Authorization: Bearer $TOKEN"
+# 断言：树包含"运营中心"
+
+# 字典（免登录可读）
+curl -s http://localhost:8080/api/v1/admin/dicts/order_status/items
+# 断言：code=0；返回 13 个订单状态项（对齐规格书 9.9）
+
+# 操作日志（先调用一个带 @OperationLog 的写接口，再查）
+curl -s "http://localhost:8080/api/v1/admin/logs/oper?pageNum=1&pageSize=5" -H "Authorization: Bearer $TOKEN"
+# 断言：total >= 1；request_params 中 phone/password 已脱敏为 ***；traceId 非空
+
+# 登录日志
+curl -s "http://localhost:8080/api/v1/admin/logs/login?pageNum=1&pageSize=5" -H "Authorization: Bearer $TOKEN"
+# 断言：有 success=1 与 success=0 各至少 1 条（先故意错密码一次）
+
+# 租户隔离（关键）
+# 用 tenantB 的账号查询，断言看不到 tenantA 的数据
+```
+
+单元测试：
+- `SysOrgServiceImplTest`：移动部门后子部门 `ancestors` 被更新
+- `OperationLogAspectTest`：含 `password` 的参数序列化后不含原值
+
+---
+
+## 禁止事项
+
+1. **不得给既有 21 张表加 `tenant_id`**。理由：`t_order` 有 3000 万行级增长假设，且 `uk_order_no` 等唯一键需重建，风险远大于收益；隔离用 `merchant_id/shop_id` 已足够（README Q1）。
+2. 不得改动 `MybatisPlusConfig` 中既有的分页插件顺序（`TenantLine` 必须在分页插件**之前**注册）。
+3. 不得让 `@OperationLog` 切面捕获并吞掉业务异常——异常必须继续向上抛给 `GlobalExceptionHandler`。
+4. 不得在操作日志里存完整请求体（只存脱敏后的摘要）。
+5. 不得用 `System.out` / `printStackTrace`。
+6. 不得修改 `t_sys_user` 已有列的类型（只允许 `dept_id`/`post_id` 语义启用，不加列）。
+7. 不得在本卡改动 order/payment/delivery/settlement/marketing 模块。
+8. 不得把 SMTP 密码、租户密钥写进 `application.yml` 默认值。
+
+---
+
+## 执行记录
+
+| 日期 | 会话范围 | 新增/修改文件 | 编译结果 | 遗留问题 |
+|---|---|---|---|---|
+| _待填_ | | | | |

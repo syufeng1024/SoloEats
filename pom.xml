@@ -20,6 +20,7 @@
 
     <modules>
         <module>solo-eats-common</module>
+        <module>solo-eats-system</module>
         <module>solo-eats-marketing</module>
         <module>solo-eats-product</module>
         <module>solo-eats-delivery</module>
@@ -107,6 +108,11 @@
             <dependency>
                 <groupId>com.soloeats</groupId>
                 <artifactId>solo-eats-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.soloeats</groupId>
+                <artifactId>solo-eats-system</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

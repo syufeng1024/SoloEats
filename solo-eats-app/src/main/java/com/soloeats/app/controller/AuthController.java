@@ -10,9 +10,11 @@ import com.soloeats.common.exception.BizException;
 import com.soloeats.common.exception.ErrorCode;
 import com.soloeats.common.ratelimit.RateLimit;
 import com.soloeats.common.ratelimit.RateLimitDimension;
+import com.soloeats.system.service.AuthService;
+import com.soloeats.system.service.command.PasswordLoginCommand;
+import com.soloeats.system.service.view.LoginResult;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Profile;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,19 +23,51 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Set;
 
 /**
- * 本地联调用模拟登录。生产环境应替换为手机号/账号密码或第三方登录。
+ * 登录入口，支持两种模式：
+ * 1. 账号密码：委托 AuthService 查 t_sys_user + bcrypt 校验 + 签发 JWT；
+ * 2. 旧契约模拟登录：{role,userId,merchantId,shopId,riderId}，由 app.auth.mock-login-enabled 控制（默认开启）。
  */
-@Profile("local")
 @RestController
 @RequestMapping("/api/v1/auth")
-@RequiredArgsConstructor
 public class AuthController {
 
     private final JwtUtils jwtUtils;
+    private final AuthService authService;
+    private final boolean mockLoginEnabled;
+
+    public AuthController(JwtUtils jwtUtils,
+                          AuthService authService,
+                          @Value("${app.auth.mock-login-enabled:true}") boolean mockLoginEnabled) {
+        this.jwtUtils = jwtUtils;
+        this.authService = authService;
+        this.mockLoginEnabled = mockLoginEnabled;
+    }
 
     @RateLimit(key = "auth-login", limit = 10, windowSeconds = 60, dimension = RateLimitDimension.IP)
     @PostMapping("/login")
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+        if (hasText(request.username()) || hasText(request.password())) {
+            LoginResult result = authService.login(
+                    new PasswordLoginCommand(request.username(), request.password()));
+            return ApiResponse.ok(new LoginResponse(
+                    result.token(),
+                    result.tokenType(),
+                    result.expiresIn(),
+                    result.roles(),
+                    result.permissions()));
+        }
+
+        if (!mockLoginEnabled) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "模拟登录已关闭，请使用 username/password 登录");
+        }
+        return ApiResponse.ok(mockLogin(request));
+    }
+
+    /**
+     * 旧契约分支：保持原有 role → UserPrincipal 的构造方式不变。
+     */
+    private LoginResponse mockLogin(LoginRequest request) {
         String role = request.role();
         UserPrincipal principal;
 
@@ -65,11 +99,16 @@ public class AuthController {
         }
 
         String token = jwtUtils.issue(principal);
-        return ApiResponse.ok(new LoginResponse(
+        return new LoginResponse(
                 token,
                 "Bearer",
                 jwtUtils.expireSeconds(),
-                principal.roles()
-        ));
+                principal.roles(),
+                Set.of()
+        );
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

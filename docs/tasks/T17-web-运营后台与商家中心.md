@@ -1,0 +1,175 @@
+# T17 web-运营后台与商家中心页面（补充卡）
+
+> 优先级：**P1** · 所属：`solo-eats-web`（Vue3 + Vite + Element Plus）
+> 按批交付：每批 4~6 页（约 18 个文件/批），与后端卡一一对应
+> 说明：本卡不在团队最初的 T01~T15 清单内，是架构师识别的缺口——规格书 4.0/4.13 要求运营后台约 82 页、商家中心约 13 页，现状只有 5 个业务页。
+
+---
+
+## 目标
+
+**一句话**：每交付一个后端模块，就在 Web 端补齐"能看见、能操作"的列表页 + 表单页，避免后端接口无人调用。
+
+**完成后系统能做什么**：运营人员能在浏览器里完成商家审核、门店管理、商品库维护、订单干预、骑手审核、派单配置、抽佣规则、提现审核、报表查看、系统管理；商家能在商家中心完成商品/门店/订单/自取核销/结算。
+
+---
+
+## 规格书依据
+
+| 章节 | 原文要点 |
+|---|---|
+| 4.0 后台导航结构 | 「工作台 / 商家招商 / 商品中心 / 订单中心 / 配送中心 / 营销中心 / 用户中心 / 资金中心 / 内容运营 / 客服与工单 / 数据报表 / 系统管理」 |
+| 4.13 商家中心 | 「深青绿主题，浅色内容区 + 深色侧边栏；工作台聚合今日营业额/订单量/待处理、今日订单流水、出餐与自取、热销 TOP5、近 7 日出餐时长」 |
+| 1.7 技术栈 | 「平台运营后台 / 商家中心：Vue 3 + Vite + Element Plus + **ECharts**，两个独立前端工程」 |
+| 4.12 | 系统管理 20 余个功能点（用户/角色/菜单/部门/岗位/字典/租户/日志/邮件/公告） |
+| 9.4 兼容性 | 「Chrome/Edge 最新版，1366×768 起；商家中心 H5 自适应，最小 1024×768」 |
+
+---
+
+## 前置依赖
+
+| 依赖 | 具体依赖物 |
+|---|---|
+| **T01/T02** | 登录（账号密码）+ `/auth/me` + `/auth/menus`（前端动态路由） |
+| **T03/T04/T05** | 商家、门店、商品三组接口 |
+| **T07/T16** | 骑手/配送/抽佣/提现接口 |
+| **T11** | 报表接口（ECharts 数据源） |
+| 既有前端 | `solo-eats-web/src/{api,stores,router,layouts,views,utils,constants}` 已有骨架；`LoginView.vue`、`AdminOverviewView.vue`、`MerchantOrdersView.vue`、`MerchantProductsView.vue`、`Admin/MerchantSettlementsView.vue` **不得重写**，只能扩展 |
+| 既有工具（**复用**） | `api/http.ts`（axios 封装）、`utils/money.ts`、`utils/datetime.ts`、`utils/idempotency.ts`、`utils/debounce.ts`、`stores/auth.ts`、`constants/orderStatus.ts`、`constants/roles.ts`、`constants/settlementStatus.ts` |
+| 需新增依赖 | `echarts` + `vue-echarts`（仅报表页用） |
+
+---
+
+## 数据模型（前端）
+
+| 内容 | 说明 |
+|---|---|
+| 动态路由 | 登录后 `GET /auth/menus` → 转 `RouteRecordRaw`；本地静态路由只保留 `Login`/`NotFound`/`Layout` |
+| 权限指令 | `v-perm="'system:user:create'"` → 无权限隐藏按钮；从 `store.auth.permissions` 读 |
+| 统一列表页范式 | `useTable()` composable（分页、loading、筛选重置、导出占位） |
+| 金额 | 一律 `money.ts` 的 `fenToYuan` 展示，提交 `yuanToFen` |
+
+---
+
+## 接口清单（本卡消费，均由前序卡提供）
+
+| # | 方法 | 路径 | 用途 |
+|---|---|---|---|
+| 1 | POST | `/api/v1/auth/login` | 账号密码登录 |
+| 2 | GET | `/api/v1/auth/me`、`/auth/menus` | 当前用户 + 菜单 |
+| 3 | GET/POST/PUT | `/api/v1/admin/users`、`/admin/roles`、`/admin/menus/tree` | 系统管理 |
+| 4 | GET | `/api/v1/admin/logs/oper`、`/admin/logs/login` | 日志中心 |
+| 5 | GET/POST | `/api/v1/admin/merchants`、`/{id}/approve`、`/{id}/reject` | 商家招商 |
+| 6 | GET/POST/PUT | `/api/v1/admin/shops`、`/{id}/delivery-area` | 门店管理 |
+| 7 | GET/POST/PUT | `/api/v1/admin/categories`、`/admin/spus` | 商品中心 |
+| 8 | GET/PUT | `/api/v1/admin/riders`、`/{id}/certification/audit` | 骑手管理 |
+| 9 | GET/PUT | `/api/v1/admin/dispatch-config`、`/admin/freight-templates` | 配送中心 |
+| 10 | GET/POST/PUT | `/api/v1/admin/commission-rules`、`/admin/payouts/{id}/audit` | 资金中心 |
+| 11 | GET | `/api/v1/admin/report/dashboard`、`/overview`、`/funnel`、`/products`、`/shops`、`/riders`、`/finance` | 数据报表 |
+| 12 | GET/PUT | `/api/v1/admin/tickets`、`/{id}/accept|handle|finish` | 客服工单 |
+| 13 | GET/POST/PUT | `/api/v1/admin/content/home/floors`、`/admin/banners`、`/admin/app-versions` | 内容运营 |
+| 14 | GET/POST/PUT | `/api/v1/admin/promotions`、`/admin/member-levels` | 营销中心 |
+
+---
+
+## 需要新增/修改的文件
+
+### 批次 1：框架与系统管理（18 个）
+
+| 类型 | 路径 |
+|---|---|
+| 新 | `solo-eats-web/src/api/system.ts`（用户/角色/菜单/部门/岗位/字典/日志） |
+| 新 | `solo-eats-web/src/stores/menu.ts`（动态路由生成） |
+| 新 | `solo-eats-web/src/directives/permission.ts`（`v-perm`） |
+| 新 | `solo-eats-web/src/composables/useTable.ts` |
+| 新 | `solo-eats-web/src/components/PageHeader.vue`、`SearchForm.vue`、`DataTable.vue`、`MoneyText.vue`、`StatusTag.vue` |
+| 改 | `solo-eats-web/src/router/index.ts`（改为「静态 + 动态」混合；保留既有路由） |
+| 改 | `solo-eats-web/src/layouts/AppLayout.vue`（菜单改为接口驱动，保留既有兜底菜单） |
+| 改 | `solo-eats-web/src/views/LoginView.vue`（**保留**既有的 role+id 快捷登录，**新增**账号密码表单 tab） |
+| 新 | `solo-eats-web/src/views/admin/system/UserView.vue`、`RoleView.vue`、`MenuView.vue`、`DeptView.vue`、`DictView.vue`、`OperLogView.vue`、`LoginLogView.vue`（7） |
+| 新 | `solo-eats-web/src/api/http.ts`（**改**：加 `X-Shop-Id`、401 跳登录、错误码拦截；保持既有导出不变） |
+
+### 批次 2：招商 · 门店 · 商品（16 个）
+
+`views/admin/merchant/{ApplyListView,AuditView,MerchantListView}.vue`、`views/admin/store/{ShopListView,ShopFormView,DeliveryAreaView}.vue`、`views/admin/product/{CategoryView,SpuListView,SpuFormView,TemplateView,SoldOutView,ReviewView}.vue`、`views/merchant/store/{ShopSettingView,PickupSettingView}.vue`、`api/{merchant,store,product}.ts`（扩展）
+
+### 批次 3：订单 · 配送 · 骑手（14 个）
+
+`views/admin/order/{OrderListView,OrderDetailView,AfterSaleView,ExceptionPoolView}.vue`、`views/admin/delivery/{RiderListView,RiderAuditView,DispatchCenterView,DeliveryListView,FreightTemplateView}.vue`、`views/merchant/order/{PickupVerifyView,ReceiptView}.vue`、`api/delivery.ts`
+
+### 批次 4：资金 · 报表 · 客服 · 内容 · 营销（18 个）
+
+`views/admin/finance/{CommissionRuleView,PayoutAuditView,FundFlowView}.vue`、`views/admin/report/{DashboardView,FunnelView,ProductRankView,FinanceReportView}.vue`、`views/admin/service/{TicketListView,TicketDetailView,FaqView}.vue`、`views/admin/content/{HomeDesignView,BannerView,AppVersionView}.vue`、`views/admin/marketing/{PromotionView,MemberLevelView}.vue`、`api/{settlement,report,service,content,marketing}.ts`（扩展）
+
+---
+
+## 关键实现约束
+
+| 项 | 约束 |
+|---|---|
+| **不重写既有页面** | `LoginView`/`AdminOverviewView`/`MerchantOrdersView`/`MerchantProductsView`/`AdminSettlementsView`/`MerchantSettlementsView` **只能增量扩展**，不得删除既有 role 快捷登录、既有列与既有请求 |
+| **路由兼容** | 新增动态路由不得破坏既有 `/admin/overview`、`/admin/settlements`、`/merchant/orders`、`/merchant/products`、`/merchant/settlements` 路径；`router/home.ts` 的 `homeForRole` 逻辑保留 |
+| **登录双模式** | `LoginView` 保留 role+id 快捷登录（local profile 用），新增「账号密码」tab；两者都走 `POST /api/v1/auth/login`（后端双模式） |
+| **动态菜单** | `GET /auth/menus` 拿不到时（后端未完成）**降级**为读取 `router/home.ts` 的静态菜单，不白屏 |
+| **金额** | 一律 `MoneyText` 组件渲染（分→元，2 位）；表单输入元、提交转分；**禁止**在页面里手写 `/100` |
+| **权限** | 按钮级用 `v-perm`；**不得**只靠隐藏按钮做安全（后端必须校验，前端只做体验） |
+| **分页** | 统一 `pageNum/pageSize`，`pageSize` 选项 `10/20/50`（上限 100） |
+| **错误处理** | `http.ts` 统一把 `code≠0` 转 `ElMessage.error(message)`；`10003` 跳登录；`10004` 提示无权限 |
+| **幂等** | 提交类按钮用 `utils/idempotency.ts` 生成 key，防重复点击 |
+| **大数据表格** | 列表 >200 行必须分页，不用前端虚拟滚动（P0） |
+| **ECharts** | 只在报表页按需 `import`；不在首屏引入，保证首屏 ≤1.5s |
+| **图表空数据** | 无数据必须显示空态而非报错 |
+| **响应式** | 运营后台最小 1366×768；商家中心最小 1024×768 |
+| **主题** | 运营后台橙色、商家中心深青绿（沿用既有 `styles/index.css` 变量，不新建主题体系） |
+| **构建** | `cd solo-eats-web && npm run build`（含 `vue-tsc --noEmit`）必须通过；**新增页面必须有 TS 类型**，不得 `any` 泛滥 |
+
+---
+
+## 验收标准
+
+```bash
+cd solo-eats-web && npm ci && npm run build
+# 断言：vue-tsc 无 error；dist 生成成功
+cd solo-eats-web && npm run test:unit
+# 断言：既有 money.spec.ts / datetime.spec.ts / debounce.spec.ts / orderStatus.spec.ts 全绿
+
+# 批次1 手工验收
+# 1) 用 admin/Admin@123 登录 → 侧边栏出现"系统管理"及 7 个子菜单
+# 2) 用户列表分页/搜索/新建用户 → 新用户可登录
+# 3) 角色页勾选菜单保存 → 该角色用户登录后侧边栏变化
+# 4) 操作日志页能按模块/时间筛选，参数列显示脱敏后的 ***
+# 5) 既有"商家中心 → 订单"页面仍可正常打开（回归，不白屏）
+
+# 批次2 手工验收
+# 6) 商家待审列表 → 点审核 → 弹窗填抽佣率 → 通过 → 列表状态变"已通过"
+# 7) 门店页地图选点保存经纬度 → 刷新后仍在
+# 8) 商品库新建 SPU 上传主图 → 门店商品页可上架
+
+# 批次4 手工验收
+# 9) 报表工作台五卡与后端 /report/dashboard 数值一致
+# 10) 漏斗图 5 级且转化率正确
+# 11) 提现审核：审核→打款→到账 三步按钮按状态启用/禁用
+```
+
+---
+
+## 禁止事项
+
+1. 不得重写 `LoginView.vue` 的既有 role 快捷登录区块（`docs/全栈启动与体验指南.md` 依赖它）。
+2. 不得删除或修改既有的 `constants/*.ts`、`utils/*.ts` 导出（有单测覆盖）。
+3. 不得删除既有 `*.spec.ts` 或修改其断言。
+4. 不得引入第二套组件库（只能 Element Plus + 自研 `components/`）。
+5. 不得在首屏引入 ECharts。
+6. 不得在页面里手写金额换算（统一 `money.ts`）。
+7. 不得把 token 存进 `localStorage` 以外的位置（沿用 `authStorage`）。
+8. 不得用 `v-perm` 代替后端权限校验。
+9. 不得改动后端任何代码（本卡纯前端）。
+10. 不得在菜单接口未就绪时直接白屏（必须降级静态菜单）。
+
+---
+
+## 执行记录
+
+| 日期 | 批次 | 新增/修改文件 | 构建结果 | 遗留问题 |
+|---|---|---|---|---|
+| _待填_ | | | | |

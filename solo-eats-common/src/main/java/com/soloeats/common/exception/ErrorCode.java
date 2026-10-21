@@ -14,6 +14,9 @@ public enum ErrorCode {
     AUTH_UNAUTHORIZED(10003, "未登录或令牌无效", HttpStatus.UNAUTHORIZED),
     AUTH_FORBIDDEN(10004, "无权访问", HttpStatus.FORBIDDEN),
     RATE_LIMITED(10005, "请求过于频繁", HttpStatus.TOO_MANY_REQUESTS),
+    AUTH_ACCOUNT_LOCKED(10006, "账号已锁定", HttpStatus.FORBIDDEN),
+    AUTH_BAD_CREDENTIALS(10007, "用户名或密码错误", HttpStatus.UNAUTHORIZED),
+    AUTH_ACCOUNT_DISABLED(10008, "账号已停用", HttpStatus.FORBIDDEN),
 
     ORDER_STATUS_INVALID(20001, "订单状态不允许当前操作", HttpStatus.CONFLICT),
     ORDER_NOT_FOUND(20002, "订单不存在", HttpStatus.NOT_FOUND),
