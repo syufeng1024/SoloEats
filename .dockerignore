@@ -1,0 +1,27 @@
+# 密钥与本地配置绝不进入构建上下文（含子目录）
+.env
+.env.*
+**/.env
+**/.env.*
+**/*.key
+**/*.pem
+.git
+.gitignore
+.vscode
+.idea
+*.iml
+
+# 构建产物、日志与本地数据
+**/target
+target-mvn
+**/*.log
+logs
+data
+
+# 测试代码与文档不参与镜像构建
+**/src/test
+docs
+scripts
+docker-compose.yml
+Dockerfile
+.dockerignore

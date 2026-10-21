@@ -1,10 +1,19 @@
 name: solo-eats
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   mysql:
     image: ${REGISTRY_PREFIX:-}library/mysql:8.0
     container_name: solo-eats-mysql
+    mem_limit: 1g
+    cpus: 2.0
     restart: unless-stopped
+    logging: *default-logging
     environment:
       TZ: Asia/Shanghai
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
@@ -35,7 +44,10 @@ services:
   redis:
     image: ${REGISTRY_PREFIX:-}library/redis:7.2-alpine
     container_name: solo-eats-redis
+    mem_limit: 256m
+    cpus: 0.5
     restart: unless-stopped
+    logging: *default-logging
     environment:
       TZ: Asia/Shanghai
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
@@ -63,7 +75,10 @@ services:
   rabbitmq:
     image: ${REGISTRY_PREFIX:-}library/rabbitmq:3.12-management-alpine
     container_name: solo-eats-rabbitmq
+    mem_limit: 512m
+    cpus: 1.0
     restart: unless-stopped
+    logging: *default-logging
     environment:
       TZ: Asia/Shanghai
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-solo}
@@ -86,7 +101,10 @@ services:
   minio:
     image: ${SILO_IMAGE:-docker.m.daocloud.io/pgsty/silo:RELEASE.2026-09-16T00-00-00Z}
     container_name: solo-eats-minio
+    mem_limit: 256m
+    cpus: 0.5
     restart: unless-stopped
+    logging: *default-logging
     environment:
       TZ: Asia/Shanghai
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
@@ -103,6 +121,78 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+    networks:
+      - solo-eats-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MAVEN_IMAGE: ${MAVEN_IMAGE:-maven:3.9-eclipse-temurin-17}
+        JRE_IMAGE: ${JRE_IMAGE:-eclipse-temurin:17-jre-alpine}
+        MAVEN_MIRROR_URL: ${MAVEN_MIRROR_URL:-}
+    image: ${APP_IMAGE:-solo-eats-app:latest}
+    container_name: solo-eats-app
+    restart: unless-stopped
+    # graceful shutdown 默认 30s，必须大于 Docker 默认 10s 的 SIGKILL 宽限期
+    stop_grace_period: 40s
+    mem_limit: 1g
+    cpus: 2.0
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      SERVER_PORT: 8080
+      # 容器内必须走服务名与容器端口，不能复用 .env 里的宿主机映射端口 3307
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-solo_eats}
+      MYSQL_USER: ${MYSQL_USER:-solo}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-solo}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+      MINIO_BUCKET: ${MINIO_BUCKET:-solo-eats}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET:?set PAYMENT_CALLBACK_SECRET in .env}
+      # 默认关闭，避免对已有库误执行迁移；全新数据卷请在 .env 显式设为 true
+      FLYWAY_ENABLED: ${FLYWAY_ENABLED:-false}
+      DB_POOL_MAX: ${DB_POOL_MAX:-20}
+      DB_POOL_MIN: ${DB_POOL_MIN:-5}
+      LOG_LEVEL_SOLOEATS: ${LOG_LEVEL_SOLOEATS:-INFO}
+      ORDER_TIMEOUT_DELAY_SECONDS: ${ORDER_TIMEOUT_DELAY_SECONDS:-900}
+      RATE_LIMIT_ORDER_CREATE: ${RATE_LIMIT_ORDER_CREATE:-20}
+      RATE_LIMIT_PAYMENT_PAY: ${RATE_LIMIT_PAYMENT_PAY:-20}
+      RATE_LIMIT_AUTH_LOGIN: ${RATE_LIMIT_AUTH_LOGIN:-10}
+      JAVA_OPTS: ${APP_JAVA_OPTS:--XX:MaxRAMPercentage=70 -XX:+UseG1GC -Duser.timezone=Asia/Shanghai}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/readyz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 50s
     networks:
       - solo-eats-net
 

@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Run unit and Testcontainers tests
+        run: mvn -B -Pisolated-build clean test
+      - name: Fail if any test was skipped
+        run: |
+          if grep -R -E 'Skipped: [1-9]' --include='*.txt' */target-mvn/surefire-reports; then
+            echo "存在 skipped 测试，可能是 Docker/Testcontainers 不可用；阻断构建"
+            exit 1
+          fi
+      - name: Upload surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: '*/target-mvn/surefire-reports/**'
+          if-no-files-found: ignore
+
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build application image
+        run: docker build -t solo-eats-app:ci .

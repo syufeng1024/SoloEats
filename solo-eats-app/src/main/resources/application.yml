@@ -23,6 +23,8 @@ spring:
       - optional:file:../.env[.properties]
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
+  lifecycle:
+    timeout-per-shutdown-phase: 25s
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -34,6 +36,7 @@ spring:
       maximum-pool-size: ${DB_POOL_MAX:20}
       minimum-idle: ${DB_POOL_MIN:5}
       connection-timeout: 30000
+      initialization-fail-timeout: 60000
       idle-timeout: 600000
       max-lifetime: 1800000
       validation-timeout: 5000
@@ -75,6 +78,8 @@ spring:
   flyway:
     enabled: ${FLYWAY_ENABLED:true}
     locations: ${FLYWAY_LOCATIONS:classpath:db/migration}
+    # 只对空库启用 Flyway；已有库保持 FLYWAY_ENABLED=false。
+    # 禁止 baseline：半成品库会被误标记为已执行 V1，导致缺表静默上线。
     baseline-on-migrate: false
     validate-on-migrate: true
     table: flyway_schema_history
@@ -103,13 +108,21 @@ mybatis-plus:
       id-type: auto
 
 management:
+  # 管理端口不对外发布，避免 metrics/health 细节暴露在业务端口
+  server:
+    port: ${MANAGEMENT_PORT:8081}
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info
   endpoint:
     health:
-      show-details: always
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db,redis,rabbit
   health:
     redis:
       enabled: true
@@ -119,7 +132,8 @@ management:
 logging:
   level:
     root: INFO
-    com.soloeats: DEBUG
+    # 默认 INFO；本地联调可在 .env 设 LOG_LEVEL_SOLOEATS=DEBUG。生产保持 INFO，避免 SQL 参数与收货信息落日志
+    com.soloeats: ${LOG_LEVEL_SOLOEATS:INFO}
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-}] %logger{40} - %msg%n"
 
