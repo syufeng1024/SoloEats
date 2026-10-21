@@ -1,7 +1,9 @@
 package com.soloeats.settlement.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.soloeats.common.exception.BizException;
 import com.soloeats.common.exception.ErrorCode;
 import com.soloeats.order.domain.entity.Order;
@@ -12,6 +14,8 @@ import com.soloeats.settlement.domain.entity.SettlementItem;
 import com.soloeats.settlement.mapper.SettlementBillMapper;
 import com.soloeats.settlement.mapper.SettlementItemMapper;
 import com.soloeats.settlement.service.SettlementService;
+import com.soloeats.settlement.service.view.AdminSettlementStatsResult;
+import com.soloeats.settlement.service.view.AdminSettlementSummary;
 import com.soloeats.settlement.service.view.SettlementBillView;
 import com.soloeats.settlement.service.view.SettlementDetailResult;
 import com.soloeats.settlement.service.view.SettlementGenerateResult;
@@ -37,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -193,6 +198,91 @@ public class SettlementServiceImpl implements SettlementService {
                 .toList();
 
         return new SettlementDetailResult(toBillView(bill), orders, itemViews);
+    }
+
+    @Override
+    public AdminSettlementStatsResult adminStats(Long merchantId, Integer status,
+                                                 LocalDate dateFrom, LocalDate dateTo,
+                                                 long pageNum, long pageSize) {
+        validateSettlementStatus(status);
+        if (dateFrom != null && dateTo != null && dateFrom.isAfter(dateTo)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "dateFrom 不能晚于 dateTo");
+        }
+        long normalizedPageNum = pageNum < 1L ? 1L : pageNum;
+        long normalizedPageSize = pageSize < 1L ? 20L : Math.min(pageSize, 100L);
+
+        QueryWrapper<SettlementBill> pageWrapper = new QueryWrapper<>();
+        applyAdminFilters(pageWrapper, merchantId, status, dateFrom, dateTo);
+        pageWrapper.orderByDesc("bill_date").orderByDesc("id");
+
+        Page<SettlementBill> page = settlementBillMapper.selectPage(
+                new Page<>(normalizedPageNum, normalizedPageSize), pageWrapper);
+        List<SettlementBillView> views = page.getRecords().stream()
+                .map(this::toBillView)
+                .toList();
+
+        QueryWrapper<SettlementBill> summaryWrapper = new QueryWrapper<>();
+        summaryWrapper.select(
+                "COUNT(*) AS bill_count",
+                "COALESCE(SUM(gross_amount), 0) AS gross_amount",
+                "COALESCE(SUM(merchant_discount), 0) AS merchant_discount",
+                "COALESCE(SUM(platform_discount), 0) AS platform_discount",
+                "COALESCE(SUM(commission_base), 0) AS commission_base",
+                "COALESCE(SUM(commission_amount), 0) AS platform_commission",
+                "COALESCE(SUM(performance_fee), 0) AS performance_fee",
+                "COALESCE(SUM(refund_amount), 0) AS refund_amount",
+                "COALESCE(SUM(payable_amount), 0) AS payable_amount",
+                "COALESCE(SUM(CASE WHEN status = 30 THEN payable_amount ELSE 0 END), 0) AS paid_amount",
+                "COALESCE(SUM(CASE WHEN status = 30 THEN 1 ELSE 0 END), 0) AS paid_count",
+                "COALESCE(SUM(CASE WHEN status IN (0, 10, 20) THEN 1 ELSE 0 END), 0) AS pending_count"
+        );
+        applyAdminFilters(summaryWrapper, merchantId, status, dateFrom, dateTo);
+
+        Map<String, Object> row = settlementBillMapper.selectMaps(summaryWrapper).stream()
+                .findFirst()
+                .orElse(Map.of());
+        AdminSettlementSummary summary = new AdminSettlementSummary(
+                summaryLong(row, "bill_count"),
+                summaryLong(row, "gross_amount"),
+                summaryLong(row, "merchant_discount"),
+                summaryLong(row, "platform_discount"),
+                summaryLong(row, "commission_base"),
+                summaryLong(row, "platform_commission"),
+                summaryLong(row, "performance_fee"),
+                summaryLong(row, "refund_amount"),
+                summaryLong(row, "payable_amount"),
+                summaryLong(row, "paid_amount"),
+                summaryLong(row, "paid_count"),
+                summaryLong(row, "pending_count")
+        );
+
+        return new AdminSettlementStatsResult(views, summary, page.getTotal(),
+                normalizedPageNum, normalizedPageSize);
+    }
+
+    private void applyAdminFilters(QueryWrapper<SettlementBill> wrapper, Long merchantId,
+                                   Integer status, LocalDate dateFrom, LocalDate dateTo) {
+        wrapper.eq(merchantId != null, "merchant_id", merchantId)
+                .eq(status != null, "status", status)
+                .ge(dateFrom != null, "bill_date", dateFrom)
+                .le(dateTo != null, "bill_date", dateTo);
+    }
+
+    private void validateSettlementStatus(Integer status) {
+        Set<Integer> valid = Set.of(0, 10, 20, 30, 40);
+        if (status != null && !valid.contains(status)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "status 不合法");
+        }
+    }
+
+    private long summaryLong(Map<String, Object> row, String alias) {
+        for (Map.Entry<String, Object> entry : row.entrySet()) {
+            if (entry.getKey().equalsIgnoreCase(alias)) {
+                Object value = entry.getValue();
+                return value instanceof Number number ? number.longValue() : 0L;
+            }
+        }
+        return 0L;
     }
 
     private Long generateForMerchant(Long merchantId, LocalDate billDate, List<Order> orders) {

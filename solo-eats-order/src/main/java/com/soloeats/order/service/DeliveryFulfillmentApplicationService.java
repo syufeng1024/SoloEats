@@ -2,6 +2,7 @@ package com.soloeats.order.service;
 
 import com.soloeats.common.exception.BizException;
 import com.soloeats.common.exception.ErrorCode;
+import com.soloeats.delivery.domain.entity.DeliveryOrder;
 import com.soloeats.delivery.service.DeliveryService;
 import com.soloeats.order.domain.entity.Order;
 import com.soloeats.order.domain.enums.FulfillmentType;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -41,6 +43,45 @@ public class DeliveryFulfillmentApplicationService {
         }
         deliveryService.accept(orderId, riderId);
         return OrderStatus.WAIT_RIDER_PICKUP;
+    }
+
+    /**
+     * 商家呼叫骑手：只推进配送单派单窗口，不改变订单状态。
+     * 允许在 PREPARING 或 WAIT_RIDER_PICKUP 阶段呼叫，骑手接单后仍需等备餐完成才能取货。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public RiderDispatchResult callRider(Long orderId) {
+        Order order = requireOrder(orderId);
+        assertDeliveryOrder(order);
+        int orderStatus = order.getStatus() == null ? -1 : order.getStatus();
+        if (orderStatus != OrderStatus.PREPARING.getCode()
+                && orderStatus != OrderStatus.WAIT_RIDER_PICKUP.getCode()) {
+            throw new BizException(ErrorCode.ORDER_STATUS_INVALID,
+                    "只有备餐中或待骑手取货的配送订单可以呼叫骑手");
+        }
+
+        if (deliveryService.getByOrderId(orderId) == null) {
+            deliveryService.createForOrder(
+                    orderId,
+                    order.getShopId(),
+                    "shop-" + order.getShopId(),
+                    order.getReceiverAddress(),
+                    order.getReceiverLng(),
+                    order.getReceiverLat(),
+                    order.getDeliveryFee()
+            );
+        }
+
+        DeliveryOrder delivery = deliveryService.dispatch(orderId);
+        return new RiderDispatchResult(
+                orderId,
+                orderStatus,
+                statusName(orderStatus),
+                delivery.getDeliveryNo(),
+                delivery.getStatus(),
+                delivery.getDispatchCount(),
+                delivery.getDispatchExpireAt()
+        );
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -88,5 +129,13 @@ public class DeliveryFulfillmentApplicationService {
         if (!Objects.equals(order.getFulfillmentType(), FulfillmentType.DELIVERY.getCode())) {
             throw new BizException(ErrorCode.ORDER_STATUS_INVALID, "自取订单不进入骑手配送");
         }
+    }
+
+    private String statusName(int code) {
+        return Arrays.stream(OrderStatus.values())
+                .filter(status -> status.getCode() == code)
+                .map(OrderStatus::getDescription)
+                .findFirst()
+                .orElse("未知状态");
     }
 }

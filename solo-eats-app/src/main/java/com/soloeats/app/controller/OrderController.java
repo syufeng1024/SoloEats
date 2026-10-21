@@ -21,6 +21,7 @@ import com.soloeats.order.domain.enums.OrderStatus;
 import com.soloeats.order.service.DeliveryFulfillmentApplicationService;
 import com.soloeats.order.service.OrderApplicationService;
 import com.soloeats.order.service.RefundService;
+import com.soloeats.order.service.RiderDispatchResult;
 import com.soloeats.order.service.command.CreateOrderCommand;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -101,6 +102,17 @@ public class OrderController {
                 "PREPARE_DONE:" + orderId
         );
         return ApiResponse.ok(OrderStatusVO.of(orderId, status));
+    }
+
+    /**
+     * 商家呼叫骑手。与下方的骑手接单接口分离：
+     * 商家只推进配送单派单窗口，骑手仍需调用 /rider/accept 绑定 riderId。
+     */
+    @RequireRole(Roles.MERCHANT)
+    @PostMapping("/{orderId}/merchant/call-rider")
+    public ApiResponse<RiderDispatchResult> callRider(@PathVariable Long orderId) {
+        permissionGuard.assertMerchantOrder(orderId);
+        return ApiResponse.ok(deliveryFulfillmentApplicationService.callRider(orderId));
     }
 
     @RequireRole(Roles.RIDER)

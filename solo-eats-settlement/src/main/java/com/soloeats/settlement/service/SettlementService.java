@@ -1,8 +1,11 @@
 package com.soloeats.settlement.service;
 
+import com.soloeats.settlement.service.view.AdminSettlementStatsResult;
 import com.soloeats.settlement.service.view.SettlementDetailResult;
 import com.soloeats.settlement.service.view.SettlementGenerateResult;
 import com.soloeats.settlement.service.view.SettlementListResult;
+
+import java.time.LocalDate;
 
 public interface SettlementService {
 
@@ -20,4 +23,11 @@ public interface SettlementService {
      * 商家结算账单明细与关联订单。
      */
     SettlementDetailResult getBillDetail(Long merchantId, Long billId);
+
+    /**
+     * 平台结算统计：跨商家账单分页 + 同一筛选条件下的佣金与应结汇总。
+     */
+    AdminSettlementStatsResult adminStats(Long merchantId, Integer status,
+                                          LocalDate dateFrom, LocalDate dateTo,
+                                          long pageNum, long pageSize);
 }

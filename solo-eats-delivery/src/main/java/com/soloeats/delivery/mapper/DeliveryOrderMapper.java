@@ -7,11 +7,27 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
+import java.time.LocalDateTime;
+
 @Mapper
 public interface DeliveryOrderMapper extends BaseMapper<DeliveryOrder> {
 
     @Select("SELECT * FROM t_delivery_order WHERE order_id = #{orderId} LIMIT 1")
     DeliveryOrder findByOrderId(@Param("orderId") Long orderId);
+
+    @Update("""
+            UPDATE t_delivery_order
+            SET status = 10,
+                dispatch_count = dispatch_count + 1,
+                dispatch_expire_at = #{expireAt},
+                version = version + 1,
+                updated_at = NOW(3)
+            WHERE order_id = #{orderId}
+              AND rider_id IS NULL
+              AND status IN (0, 10, 71)
+            """)
+    int dispatch(@Param("orderId") Long orderId,
+                 @Param("expireAt") LocalDateTime expireAt);
 
     @Update("""
             UPDATE t_delivery_order

@@ -7,6 +7,7 @@ import com.soloeats.delivery.domain.entity.RiderIncome;
 import com.soloeats.delivery.domain.enums.DeliveryOrderStatus;
 import com.soloeats.delivery.mapper.DeliveryOrderMapper;
 import com.soloeats.delivery.mapper.RiderIncomeMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,10 +15,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,6 +40,74 @@ class DeliveryServiceImplTest {
 
     @InjectMocks
     private DeliveryServiceImpl deliveryService;
+
+    @BeforeEach
+    void setUpDispatchConfig() {
+        ReflectionTestUtils.setField(deliveryService, "dispatchExpireSeconds", 15);
+        ReflectionTestUtils.setField(deliveryService, "dispatchMaxRetry", 3);
+    }
+
+    @Test
+    @DisplayName("商家呼叫骑手：配送单 0 -> 10 并累加派单次数")
+    void dispatchFromWaitAssign() {
+        DeliveryOrder waiting = delivery(DeliveryOrderStatus.WAIT_ASSIGN);
+        waiting.setDispatchCount(0);
+        DeliveryOrder dispatched = delivery(DeliveryOrderStatus.ASSIGNED);
+        dispatched.setDeliveryNo("DL90001");
+        dispatched.setDispatchCount(1);
+
+        when(deliveryOrderMapper.findByOrderId(ORDER_ID)).thenReturn(waiting, dispatched);
+        when(deliveryOrderMapper.dispatch(eq(ORDER_ID), any(LocalDateTime.class))).thenReturn(1);
+
+        DeliveryOrder result = deliveryService.dispatch(ORDER_ID);
+
+        assertThat(result.getStatus()).isEqualTo(DeliveryOrderStatus.ASSIGNED.getCode());
+        assertThat(result.getDispatchCount()).isEqualTo(1);
+        verify(deliveryOrderMapper).dispatch(eq(ORDER_ID), any(LocalDateTime.class));
+    }
+
+    @Test
+    @DisplayName("派单窗口内重复呼叫保持幂等，不重复累加派单次数")
+    void dispatchIdempotentWithinWindow() {
+        DeliveryOrder assigned = delivery(DeliveryOrderStatus.ASSIGNED);
+        assigned.setDispatchCount(1);
+        assigned.setDispatchExpireAt(LocalDateTime.now().plusSeconds(10));
+        when(deliveryOrderMapper.findByOrderId(ORDER_ID)).thenReturn(assigned);
+
+        DeliveryOrder result = deliveryService.dispatch(ORDER_ID);
+
+        assertThat(result.getDispatchCount()).isEqualTo(1);
+        verify(deliveryOrderMapper, never()).dispatch(any(), any());
+    }
+
+    @Test
+    @DisplayName("骑手已接单后商家再次呼叫抛 DISPATCH_TAKEN")
+    void dispatchAfterRiderAccepted() {
+        DeliveryOrder accepted = delivery(DeliveryOrderStatus.ACCEPTED);
+        accepted.setRiderId(RIDER_ID);
+        when(deliveryOrderMapper.findByOrderId(ORDER_ID)).thenReturn(accepted);
+
+        assertBizCode(() -> deliveryService.dispatch(ORDER_ID), ErrorCode.DISPATCH_TAKEN);
+    }
+
+    @Test
+    @DisplayName("达到最大派单次数后抛 DISPATCH_TAKEN")
+    void dispatchMaxRetryReached() {
+        DeliveryOrder waiting = delivery(DeliveryOrderStatus.WAIT_ASSIGN);
+        waiting.setDispatchCount(3);
+        when(deliveryOrderMapper.findByOrderId(ORDER_ID)).thenReturn(waiting);
+
+        assertBizCode(() -> deliveryService.dispatch(ORDER_ID), ErrorCode.DISPATCH_TAKEN);
+    }
+
+    @Test
+    @DisplayName("已取消配送单不允许呼叫骑手")
+    void dispatchCancelledDelivery() {
+        DeliveryOrder cancelled = delivery(DeliveryOrderStatus.CANCELLED);
+        when(deliveryOrderMapper.findByOrderId(ORDER_ID)).thenReturn(cancelled);
+
+        assertBizCode(() -> deliveryService.dispatch(ORDER_ID), ErrorCode.DELIVERY_STATE_INVALID);
+    }
 
     @Test
     @DisplayName("首次取餐完成时生成配送单，配送费为空按 0 处理")

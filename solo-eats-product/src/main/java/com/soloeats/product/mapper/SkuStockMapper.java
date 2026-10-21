@@ -65,4 +65,23 @@ public interface SkuStockMapper extends BaseMapper<SkuStock> {
     int refundStock(@Param("shopId") Long shopId,
                     @Param("skuId") Long skuId,
                     @Param("qty") int qty);
+
+    /**
+     * 商家维护可售库存与估清标记；null 字段不更新。
+     */
+    @Update("""
+            <script>
+            UPDATE t_sku_stock
+            SET version = version + 1,
+                updated_at = NOW(3)
+                <if test="availableQty != null">, available_qty = #{availableQty}</if>
+                <if test="soldOut != null">, sold_out = #{soldOut}</if>
+            WHERE shop_id = #{shopId}
+              AND sku_id = #{skuId}
+            </script>
+            """)
+    int updateManualStock(@Param("shopId") Long shopId,
+                          @Param("skuId") Long skuId,
+                          @Param("availableQty") Integer availableQty,
+                          @Param("soldOut") Boolean soldOut);
 }

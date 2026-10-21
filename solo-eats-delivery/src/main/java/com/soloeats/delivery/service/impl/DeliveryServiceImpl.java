@@ -9,6 +9,7 @@ import com.soloeats.delivery.mapper.DeliveryOrderMapper;
 import com.soloeats.delivery.mapper.RiderIncomeMapper;
 import com.soloeats.delivery.service.DeliveryService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,9 +27,56 @@ public class DeliveryServiceImpl implements DeliveryService {
     private final DeliveryOrderMapper deliveryOrderMapper;
     private final RiderIncomeMapper riderIncomeMapper;
 
+    @Value("${app.dispatch.expire-seconds:15}")
+    private int dispatchExpireSeconds;
+
+    @Value("${app.dispatch.max-retry:3}")
+    private int dispatchMaxRetry;
+
     @Override
     public DeliveryOrder getByOrderId(Long orderId) {
         return deliveryOrderMapper.findByOrderId(orderId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DeliveryOrder dispatch(Long orderId) {
+        DeliveryOrder existing = requireDelivery(orderId);
+        if (existing.getRiderId() != null) {
+            throw new BizException(ErrorCode.DISPATCH_TAKEN, "配送单已被骑手接单");
+        }
+
+        int status = existing.getStatus() == null ? -1 : existing.getStatus();
+        if (status == DeliveryOrderStatus.CANCELLED.getCode()) {
+            throw new BizException(ErrorCode.DELIVERY_STATE_INVALID, "配送单已取消");
+        }
+        if (status >= DeliveryOrderStatus.ACCEPTED.getCode()
+                && status != DeliveryOrderStatus.REASSIGNED.getCode()) {
+            throw new BizException(ErrorCode.DELIVERY_STATE_INVALID, "配送单已进入骑手履约阶段");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        if (status == DeliveryOrderStatus.ASSIGNED.getCode()
+                && existing.getDispatchExpireAt() != null
+                && existing.getDispatchExpireAt().isAfter(now)) {
+            // 派单窗口内重复呼叫按幂等处理，不重复累加派单次数
+            return existing;
+        }
+
+        int dispatchCount = existing.getDispatchCount() == null ? 0 : existing.getDispatchCount();
+        if (dispatchCount >= dispatchMaxRetry) {
+            throw new BizException(ErrorCode.DISPATCH_TAKEN, "配送单已达到最大派单次数");
+        }
+
+        LocalDateTime expireAt = now.plusSeconds(dispatchExpireSeconds);
+        if (deliveryOrderMapper.dispatch(orderId, expireAt) != 1) {
+            DeliveryOrder latest = requireDelivery(orderId);
+            if (latest.getRiderId() != null) {
+                throw new BizException(ErrorCode.DISPATCH_TAKEN, "配送单已被骑手接单");
+            }
+            throw new BizException(ErrorCode.DELIVERY_STATE_INVALID);
+        }
+        return requireDelivery(orderId);
     }
 
     @Override

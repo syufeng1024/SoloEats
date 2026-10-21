@@ -16,6 +16,12 @@ public interface DeliveryService {
                         BigDecimal receiverLat, Long deliveryFee);
 
     /**
+     * 商家呼叫骑手：配送单 0/10/71 -> 10，写入派单次数与派单过期时间。
+     * 不绑定骑手，骑手仍需调用 accept 接单。
+     */
+    DeliveryOrder dispatch(Long orderId);
+
+    /**
      * 骑手接单：配送单 0/10 -> 20。
      */
     DeliveryOrder accept(Long orderId, Long riderId);

@@ -36,6 +36,43 @@ public class PermissionGuard {
         }
     }
 
+    public Long requireMerchantId() {
+        Long merchantId = principal().merchantId();
+        if (merchantId == null) {
+            throw new BizException(ErrorCode.AUTH_FORBIDDEN, "令牌缺少 merchantId");
+        }
+        return merchantId;
+    }
+
+    /**
+     * 商家端写商品/库存必须落在令牌绑定的门店内。
+     */
+    public Long resolveShopId(Long requestedShopId) {
+        Long tokenShopId = principal().shopId();
+        if (tokenShopId == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "登录令牌缺少 shopId，请使用带门店身份的商家账号重新登录");
+        }
+        if (requestedShopId != null && !Objects.equals(requestedShopId, tokenShopId)) {
+            throw new BizException(ErrorCode.AUTH_FORBIDDEN);
+        }
+        return tokenShopId;
+    }
+
+    /**
+     * 订单查询允许令牌不带 shopId；带 shopId 时必须与请求一致。
+     */
+    public Long resolveOptionalShopId(Long requestedShopId) {
+        Long tokenShopId = principal().shopId();
+        if (tokenShopId == null) {
+            return requestedShopId;
+        }
+        if (requestedShopId != null && !Objects.equals(requestedShopId, tokenShopId)) {
+            throw new BizException(ErrorCode.AUTH_FORBIDDEN);
+        }
+        return tokenShopId;
+    }
+
     public void assertRider(Long riderId) {
         if (!Objects.equals(principal().riderId(), riderId)) {
             throw new BizException(ErrorCode.AUTH_FORBIDDEN);

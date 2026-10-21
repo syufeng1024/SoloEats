@@ -1,0 +1,142 @@
+:root {
+  --el-color-primary: #e8590c;
+  --el-color-primary-light-3: #f08c4f;
+  --el-color-primary-light-5: #f5aa7d;
+  --el-color-primary-light-7: #f9c9aa;
+  --el-color-primary-light-8: #fbd9c2;
+  --el-color-primary-light-9: #fdefe7;
+  --el-color-primary-dark-2: #ba470a;
+
+  --app-bg: #f4f5f7;
+  --app-ink: #1f2937;
+  --app-muted: #64748b;
+  --app-border: #e2e8f0;
+  --app-sidebar: #18211d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--app-bg);
+  color: var(--app-ink);
+  font-family:
+    'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-lead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-lead h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.page-lead p {
+  margin-top: 6px;
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.stat-label {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.stat-value {
+  margin-top: 8px;
+  font-size: 24px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-unit {
+  margin-left: 4px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--app-muted);
+}
+
+.mono {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px;
+}
+
+.muted {
+  color: var(--app-muted);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.el-table {
+  --el-table-header-bg-color: #f8fafc;
+}
+
+@media (max-width: 900px) {
+  .stat-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}
