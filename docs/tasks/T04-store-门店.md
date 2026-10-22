@@ -26,7 +26,7 @@
 | 4.2 门店管理 | 「门店列表、增删改、地址与经纬度（地图选点）、**营业时间（支持多时段）**、**营业状态（营业/打烊/休息）**、联系电话、门店图片/视频、配送方式（平台配送 / 到店自取；本期不含商家自配送）、**起送价、配送费、打包费、预计出餐时长**、门店公告」 |
 | 4.2 到店自取 | 「自取开关、自取营业时段、**取餐码规则（前缀/位数/有效期）**、自取备餐时长、自取优惠设置（如自取立减）、自取订单核销记录与超时未取处理」 |
 | 4.2 配送范围 | 「门店配送围栏（**圆形/多边形地图绘制**）、起送距离、超范围提示（**自取订单不受配送围栏限制**）」 |
-| 4.2 连锁管理 | 「品牌 → 门店层级、品牌统一配置下发」 |
+| 4.2 连锁管理 | 「品牌 → 门店层级、品牌统一配置下发」 → **本期裁剪**：不建 `t_brand` 表、不做品牌统一配置下发；`t_shop.brand_id` 仅作预留字段（来源待定），验收不覆盖。理由：P0 个人练手无连锁商家场景，规格书 1.6 P0 门店范围不含连锁管理（属 P1/P2） |
 | 5.2.2 首页 | 「附近好店推荐：卡片流：头图、名称、评分、月售、起送价、配送费、预计送达、距离、活动标签；排序筛选：综合/距离最近/销量最高/评分最高/起送价最低」 |
 | 2.5 核心领域模型 | 「商家 1:N 门店；门店 1:1 结算账户」 |
 | 8.6 到店自取流程 | 自取单不校验配送围栏、免配送费、取餐码唯一（`uk_pickup_code(shop_id, pickup_code_date, pickup_code)` 已存在于 `t_order`） |
@@ -51,7 +51,7 @@
 
 | 表 | 关键字段 | 索引 |
 |---|---|---|
-| `t_shop` | id, tenant_id, merchant_id, shop_no varchar(32), shop_name, brand_id, category_id, province, city, district, address, **lng decimal(10,6)**, **lat decimal(10,6)**, contact_name, contact_phone, logo_url, cover_url, image_urls json, announcement varchar(500), **status tinyint(0休息 1营业 2打烊 3停用)**, delivery_types tinyint（位掩码：1平台配送 2到店自取）, **min_order_amount bigint（起送价，分）**, **delivery_fee bigint（配送费，分）**, **packaging_fee bigint（打包费，分）**, **prep_minutes int（预计出餐时长）**, delivery_radius_m int, rating decimal(3,2), rating_taste/rating_package/rating_delivery decimal(3,2), month_sales int, sort_weight int, **pickup_enabled tinyint**, pickup_prepare_minutes int, pickup_timeout_minutes int, **pickup_code_prefix varchar(8)**, **pickup_code_length tinyint DEFAULT 6**, **pickup_discount bigint DEFAULT 0（自取立减，分）**, settle_account_id, version, created_at/updated_at/deleted | `uk_shop_no(shop_no)`、`idx_merchant(merchant_id)`、`idx_city_status(city, status)`、`idx_geo(lat, lng)`、`idx_sort(status, sort_weight, month_sales)` |
+| `t_shop` | id, tenant_id, merchant_id, shop_no varchar(32), shop_name, brand_id, category_id, province, city, district, address, **lng decimal(10,6)**, **lat decimal(10,6)**, contact_name, contact_phone, logo_url, cover_url, image_urls json, announcement varchar(500), **status tinyint(0休息 1营业 2打烊 3停用)**, delivery_types tinyint（位掩码：1平台配送 2到店自取）, **min_order_amount bigint（起送价，分）**, **delivery_fee bigint（配送费，分）**, **packaging_fee bigint（打包费，分）**, **prep_minutes int（预计出餐时长）**, delivery_radius_m int, rating decimal(3,2), rating_taste/rating_package/rating_delivery decimal(3,2), month_sales int, sort_weight int, **pickup_enabled tinyint**, pickup_prepare_minutes int, pickup_timeout_minutes int, **pickup_code_prefix varchar(8)**, **pickup_code_length tinyint DEFAULT 6**, **pickup_code_valid_minutes int DEFAULT 30（取餐码有效期，与超时未取 `pickup_timeout_minutes` 不同语义）**, **pickup_discount bigint DEFAULT 0（自取立减，分）**, settle_account_id, version, created_at/updated_at/deleted | `uk_shop_no(shop_no)`、`idx_merchant(merchant_id)`、`idx_city_status(city, status)`、`idx_geo(lat, lng)`、`idx_sort(status, sort_weight, month_sales)` |
 | `t_shop_business_hour` | id, tenant_id, shop_id, day_of_week tinyint(1~7), start_time time, end_time time, cross_day tinyint（跨天，如 22:00-02:00）, created_at | `idx_shop_day(shop_id, day_of_week)` |
 | `t_shop_delivery_area` | id, tenant_id, shop_id, **area_type tinyint(1圆形 2多边形)**, center_lng decimal(10,6), center_lat decimal(10,6), **radius_m int**, **polygon_json json**（`[[lng,lat],...]`）, status tinyint(0启用 1停用), created_at/updated_at/deleted | `idx_shop(shop_id)` |
 | `t_shop_account` | id, tenant_id, shop_id, merchant_id, user_id, account_role tinyint(1店长 2店员), is_default tinyint（登录默认门店）, status, created_at/updated_at/deleted | `uk_shop_user(shop_id, user_id)`、`idx_user(user_id)` |
@@ -76,7 +76,7 @@
 | 9 | PUT | `/api/v1/merchant/shops/{id}` | 编辑（**不允许**改 `merchantId`、`rating`、`month_sales`） | `MERCHANT` |
 | 10 | PUT | `/api/v1/merchant/shops/{id}/business-hours` | `{hours:[{dayOfWeek,startTime,endTime}]}` 全量替换 | `MERCHANT` |
 | 11 | PUT | `/api/v1/merchant/shops/{id}/status` | 营业状态开关（营业/休息/打烊） | `MERCHANT` |
-| 12 | PUT | `/api/v1/merchant/shops/{id}/pickup` | `{pickupEnabled,pickupPrepareMinutes,pickupTimeoutMinutes,pickupCodePrefix,pickupCodeLength,pickupDiscount}` | `MERCHANT` |
+| 12 | PUT | `/api/v1/merchant/shops/{id}/pickup` | `{pickupEnabled,pickupPrepareMinutes,pickupTimeoutMinutes,pickupCodePrefix,pickupCodeLength,pickupCodeValidMinutes,pickupDiscount}` | `MERCHANT` |
 | 13 | POST | `/api/v1/merchant/shops/{id}/accounts` | `{username,password,nickname,phone,accountRole}` → 建账号 + 绑门店 | `MERCHANT` |
 | 14 | GET | `/api/v1/merchant/shops/{id}/accounts` | 门店账号列表 | `MERCHANT` |
 | 15 | DELETE | `/api/v1/merchant/shops/{id}/accounts/{userId}` | 解绑（不删用户） | `MERCHANT` |
@@ -216,4 +216,4 @@ curl -s "http://localhost:8080/api/v1/merchant/shops" -H "Authorization: Bearer 
 
 | 日期 | 会话范围 | 新增/修改文件 | 编译结果 | 遗留问题 |
 |---|---|---|---|---|
-| _待填_ | | | | |
+| 2026-10-22 | T04 | 新增 `solo-eats-store` 模块（pom + 5 实体 + 2 枚举 + 5 Mapper + 4 Service 接口/4 实现 + 5 Command + 5 View + `GeoUtils` + `GeoUtilsTest`）；新增 `V8__store.sql`（t_shop / t_shop_business_hour / t_shop_delivery_area / t_shop_account / t_shop_decoration + 菜单 60~62）；新增 3 个 Controller（Admin / Merchant / Client）、5 个 DTO；改父 `pom.xml`、`solo-eats-app/pom.xml`、`ErrorCode`（追加 70101~70105）；共 41 个文件 | `mvn -q -pl solo-eats-store -am compile`、`mvn -q -pl solo-eats-app -am compile`、`mvn -q -DskipTests package` 均通过；`GeoUtilsTest` 5 用例 0 失败 | 1) 任务卡接口清单无门店删除接口，逻辑删除及「无进行中订单/在售商品」校验未实现；2) 多边形边界点按射线法可能判为范围外，如需包含边界要单独处理；3) 取餐码只落配置，生成/核销依赖订单与自取流程（T13）；4) 同一 user 关联多门店仅落 `t_shop_account`，接口只支持新建账号，`X-Shop-Id` 切换在 T15；5) 建店依赖 T03 已审核商家，当前 V7 无种子商家，联调前需先走入驻审批 |

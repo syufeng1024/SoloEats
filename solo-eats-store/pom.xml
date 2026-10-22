@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.soloeats</groupId>
+        <artifactId>solo-eats-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>solo-eats-store</artifactId>
+    <name>solo-eats-store</name>
+    <description>门店、营业时段、配送围栏、门店账号与门店装修</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.soloeats</groupId>
+            <artifactId>solo-eats-common</artifactId>
+        </dependency>
+        <!-- 门店账号复用 SysUserService 建 t_sys_user，并绑 MERCHANT_CLERK 角色 -->
+        <dependency>
+            <groupId>com.soloeats</groupId>
+            <artifactId>solo-eats-system</artifactId>
+        </dependency>
+        <!-- 门店必须归属一个已通过审核的商家，只通过 MerchantProfileService 接口读取 -->
+        <dependency>
+            <groupId>com.soloeats</groupId>
+            <artifactId>solo-eats-merchant</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

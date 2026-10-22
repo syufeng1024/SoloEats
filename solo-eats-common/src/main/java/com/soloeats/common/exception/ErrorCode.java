@@ -55,7 +55,13 @@ public enum ErrorCode {
     // 公共文件服务，建议后续迁移 1xxxx；后续新增文件类错误码一律用 1xxxx
     FILE_UPLOAD_FAILED(70004, "文件上传失败", HttpStatus.INTERNAL_SERVER_ERROR),
     FILE_TYPE_NOT_ALLOWED(70005, "文件类型不支持", HttpStatus.BAD_REQUEST),
-    MERCHANT_APPLY_FORBIDDEN(70006, "入驻申请凭证无效或已过期", HttpStatus.FORBIDDEN);
+    MERCHANT_APPLY_FORBIDDEN(70006, "入驻申请凭证无效或已过期", HttpStatus.FORBIDDEN),
+
+    SHOP_NOT_FOUND(70101, "门店不存在", HttpStatus.NOT_FOUND),
+    SHOP_CLOSED(70102, "门店未营业或已打烊", HttpStatus.CONFLICT),
+    SHOP_OUT_OF_RANGE(70103, "超出配送范围", HttpStatus.BAD_REQUEST),
+    SHOP_BELOW_MIN_ORDER(70104, "未达起送价", HttpStatus.BAD_REQUEST),
+    SHOP_PICKUP_DISABLED(70105, "门店未开通到店自取", HttpStatus.BAD_REQUEST);
 
     private final int code;
     private final String message;

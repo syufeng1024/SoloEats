@@ -22,6 +22,7 @@
         <module>solo-eats-common</module>
         <module>solo-eats-system</module>
         <module>solo-eats-merchant</module>
+        <module>solo-eats-store</module>
         <module>solo-eats-marketing</module>
         <module>solo-eats-product</module>
         <module>solo-eats-delivery</module>
@@ -130,6 +131,11 @@
             <dependency>
                 <groupId>com.soloeats</groupId>
                 <artifactId>solo-eats-merchant</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.soloeats</groupId>
+                <artifactId>solo-eats-store</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

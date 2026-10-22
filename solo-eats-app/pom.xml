@@ -29,6 +29,10 @@
         </dependency>
         <dependency>
             <groupId>com.soloeats</groupId>
+            <artifactId>solo-eats-store</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.soloeats</groupId>
             <artifactId>solo-eats-product</artifactId>
         </dependency>
         <dependency>
