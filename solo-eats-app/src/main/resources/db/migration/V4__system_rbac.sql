@@ -218,44 +218,44 @@ ON DUPLICATE KEY UPDATE id = id;
 -- ------------------------------------------------------------
 INSERT INTO t_sys_role_menu (tenant_id, role_id, menu_id)
 SELECT 1, 1, id FROM t_sys_menu WHERE tenant_id = 1
-ON DUPLICATE KEY UPDATE id = id;
+ON DUPLICATE KEY UPDATE t_sys_role_menu.id = t_sys_role_menu.id;
 
 INSERT INTO t_sys_role_menu (tenant_id, role_id, menu_id)
 SELECT 1, 2, id FROM t_sys_menu WHERE tenant_id = 1 AND id IN (1, 2)
-ON DUPLICATE KEY UPDATE id = id;
+ON DUPLICATE KEY UPDATE t_sys_role_menu.id = t_sys_role_menu.id;
 
 INSERT INTO t_sys_role_menu (tenant_id, role_id, menu_id)
 SELECT 1, 3, id FROM t_sys_menu WHERE tenant_id = 1 AND id IN (1, 3)
-ON DUPLICATE KEY UPDATE id = id;
+ON DUPLICATE KEY UPDATE t_sys_role_menu.id = t_sys_role_menu.id;
 
 INSERT INTO t_sys_role_menu (tenant_id, role_id, menu_id)
 SELECT 1, 4, id FROM t_sys_menu WHERE tenant_id = 1 AND id IN (1, 6)
-ON DUPLICATE KEY UPDATE id = id;
+ON DUPLICATE KEY UPDATE t_sys_role_menu.id = t_sys_role_menu.id;
 
 INSERT INTO t_sys_role_menu (tenant_id, role_id, menu_id)
 SELECT 1, 5, id FROM t_sys_menu WHERE tenant_id = 1 AND id IN (1, 4, 5)
-ON DUPLICATE KEY UPDATE id = id;
+ON DUPLICATE KEY UPDATE t_sys_role_menu.id = t_sys_role_menu.id;
 
 INSERT INTO t_sys_role_menu (tenant_id, role_id, menu_id)
 SELECT 1, 6, id FROM t_sys_menu WHERE tenant_id = 1 AND id IN (1, 4, 10)
-ON DUPLICATE KEY UPDATE id = id;
+ON DUPLICATE KEY UPDATE t_sys_role_menu.id = t_sys_role_menu.id;
 
 INSERT INTO t_sys_role_menu (tenant_id, role_id, menu_id)
 SELECT 1, 7, id FROM t_sys_menu WHERE tenant_id = 1 AND id IN (1, 8, 11)
-ON DUPLICATE KEY UPDATE id = id;
+ON DUPLICATE KEY UPDATE t_sys_role_menu.id = t_sys_role_menu.id;
 
 INSERT INTO t_sys_role_menu (tenant_id, role_id, menu_id)
 SELECT 1, 8, id FROM t_sys_menu WHERE tenant_id = 1 AND id IN (1, 11)
-ON DUPLICATE KEY UPDATE id = id;
+ON DUPLICATE KEY UPDATE t_sys_role_menu.id = t_sys_role_menu.id;
 
 INSERT INTO t_sys_role_menu (tenant_id, role_id, menu_id)
 SELECT 1, 9, id FROM t_sys_menu WHERE tenant_id = 1 AND id IN (1, 3, 4, 8)
-ON DUPLICATE KEY UPDATE id = id;
+ON DUPLICATE KEY UPDATE t_sys_role_menu.id = t_sys_role_menu.id;
 
 INSERT INTO t_sys_role_menu (tenant_id, role_id, menu_id)
 SELECT 1, 10, id FROM t_sys_menu WHERE tenant_id = 1 AND id IN (1, 3, 4)
-ON DUPLICATE KEY UPDATE id = id;
+ON DUPLICATE KEY UPDATE t_sys_role_menu.id = t_sys_role_menu.id;
 
 INSERT INTO t_sys_role_menu (tenant_id, role_id, menu_id)
 SELECT 1, 11, id FROM t_sys_menu WHERE tenant_id = 1 AND id IN (1, 5)
-ON DUPLICATE KEY UPDATE id = id;
+ON DUPLICATE KEY UPDATE t_sys_role_menu.id = t_sys_role_menu.id;
