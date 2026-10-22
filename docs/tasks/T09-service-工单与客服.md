@@ -47,6 +47,9 @@
 | `t_complaint` | id, tenant_id, ticket_id, **order_id**, complainant_type, complainant_id, **target_type tinyint(2商家 3骑手 4平台)**, target_id, reason varchar(500), **liability tinyint NULL(1商家 2骑手 3平台 4用户)**, **result varchar(500)**, **punish_action tinyint(0无 1警告 2扣款 3封禁)**, callback_at, callback_result, created_at/updated_at | `idx_ticket(ticket_id)`、`idx_target(target_type, target_id)` |
 | `t_faq` | id, tenant_id, category varchar(64), question varchar(200), answer text, sort, **view_count int**, status, created_at/updated_at/deleted | `idx_category_sort(category, sort)` |
 | `t_feedback` | id, tenant_id, user_id, content varchar(1000), images_json json, contact varchar(64), status tinyint(0待处理 1已回复), reply varchar(1000), reply_at, created_at | `idx_status_time(status, created_at)` |
+| `t_quick_reply` | id, tenant_id, category varchar(64), content varchar(500), sort, status, created_at/updated_at/deleted | `idx_category_sort(category, sort)` |
+
+> 客服会话（`peer_type=4`）复用 T08 的会话/消息表，本卡不重复建表，只新增坐席端接入逻辑与 `t_quick_reply`。
 
 ---
 
@@ -74,6 +77,14 @@
 | 18 | GET/POST/PUT/DELETE | `/api/v1/admin/faqs`（+`/{id}`） | FAQ 维护 | `service:faq:*` |
 | 19 | GET | `/api/v1/admin/feedbacks`、`PUT /{id}/reply` | 反馈处理 | `service:feedback:*` |
 | 20 | GET | `/api/v1/admin/tickets/stats` | 接待量、平均响应时长、办结率、满意度 | `service:ticket:list` |
+| 21 | GET | `/api/v1/admin/cs/sessions` | **客服工作台·会话列表**（`peer_type=4`，按 `status 待接待/接待中/已结束`、`waiting_count` 排序，含未读） | `service:cs:list` |
+| 22 | POST | `/api/v1/admin/cs/sessions/{id}/take` | **接待**（空闲客服抢接，条件更新 `assignee_id=NULL → 本人`，防并发双接待） | `service:cs:handle` |
+| 23 | POST | `/api/v1/admin/cs/sessions/{id}/transfer` | `{toAgentId}` **转接**（写会话记录，`assignee_id` 变更） | `service:cs:handle` |
+| 24 | POST | `/api/v1/admin/cs/sessions/{id}/close` | **结束会话**（`peer_type=4` 会话置结束，用户侧只读） | `service:cs:handle` |
+| 25 | GET | `/api/v1/admin/cs/quick-replies` | 快捷回复话术（分类 + 内容，`peer_type=4` 会话内快捷发送） | `service:cs:list` |
+| 26 | GET | `/api/v1/admin/cs/sessions/{id}/messages` | 会话记录查询（复用 T08 `ImService` 消息分页） | `service:cs:list` |
+
+> 接口 21~26 为**客服工作台坐席端**，复用 T08 的 `ImService`/`peer_type=4` 会话通道；T08 只提供 C 端 IM，坐席端由本卡落地，**消除 T08↔T09 之间的真空**。客服绩效 `stats`（接口 20）的「接待量」须同时统计工单量 + 会话接待量。
 
 **新增错误码**（9xxxx 追加）：`90010 TICKET_NOT_FOUND`、`90011 TICKET_STATUS_INVALID`、`90012 TICKET_NOT_OWNER`、`90013 TICKET_ALREADY_ASSIGNED`。
 
@@ -97,6 +108,9 @@
 | 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/ConsumerTicketController.java` |
 | 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminTicketController.java` |
 | 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminFaqController.java` |
+| 新 | `.../service/CsSessionService.java` + `impl`（客服工作台：会话列表/接待/转接/结束，复用 T08 `ImService`） |
+| 新 | `.../service/QuickReplyService.java` + `impl`（快捷话术，`t_quick_reply` 表并入 V15 脚本） |
+| 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminCsController.java`（接口 21~26 坐席端） |
 | 新 | `solo-eats-service/src/test/java/com/soloeats/service/domain/enums/TicketStatusTest.java` |
 
 ---

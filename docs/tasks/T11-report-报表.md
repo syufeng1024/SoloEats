@@ -1,7 +1,8 @@
 # T11 report-经营 · 流量 · 商品 · 商家 · 骑手 · 财务报表
 
-> 优先级：**P1** · 所属模块：`solo-eats-report`（新建）+ `solo-eats-app`
-> 单段执行（约 14 个文件）
+> 优先级：**P0（阶段A：工作台今日卡片 + 经营总览日粒度）/ P1（阶段B：完整 6 张报表 + 漏斗 + 排行）** · 所属模块：`solo-eats-report`（新建）+ `solo-eats-app`
+> 分两段执行：**阶段A（约 5 个文件）→ 阶段B（约 9 个文件）**
+> 说明：规格书 1.6 平台后台 P0 明确含「**基础报表**」，故拆出 P0 先行段（阶段A），在批次 4/5 提前交付工作台出数，确保 P0 验收不因本卡整体排 P1 而缺失。
 
 ---
 
@@ -21,7 +22,7 @@
 | 4.1 工作台 | 「实时数据卡：今日 GMV、订单量、客单价、新增用户、在线骑手、进行中订单、异常订单数；趋势图表（7/30 日折线、时段热力图、品类占比）」 |
 | 9.10 埋点方案 | 「首页曝光/点击/加购/下单/支付的转化漏斗；埋点写独立表或日志文件，由报表任务聚合；练手环境可简化为『接口埋点 + 定时聚合』」 |
 | 9.1 性能 | 「后台列表：万级数据分页查询 ≤500ms」 |
-| 1.6 | 「平台后台 P0：基础报表」→ 本卡 P1 做完整版，P0 部分（今日卡片）优先交付 |
+| 1.6 | 「平台后台 P0：基础报表」→ 本卡拆 P0 阶段A（工作台今日卡片 + 经营总览日粒度）优先交付，P1 阶段B 做完整版 |
 
 ---
 
@@ -46,7 +47,7 @@
 | `t_report_daily_platform` | id, tenant_id, **stat_date date**, **gmv bigint**, **order_count int**, **paid_order_count int**, **refund_amount bigint**, **refund_order_count int**, **new_user_count int**, **active_user_count int**, **avg_order_amount bigint**, **commission_income bigint**, **settlement_expense bigint**, **subsidy_cost bigint**, **gross_profit bigint**, created_at/updated_at | `uk_date(tenant_id, stat_date)` |
 | `t_report_daily_shop` | id, tenant_id, stat_date, shop_id, merchant_id, **order_count**, **gmv**, **refund_amount**, **avg_prep_minutes**, **cancel_rate decimal(5,2)**, **rating decimal(3,2)**, **pickup_order_count**, **delivery_order_count**, created_at/updated_at | `uk_shop_date(shop_id, stat_date)`、`idx_merchant_date(merchant_id, stat_date)` |
 | `t_report_daily_spu` | id, tenant_id, stat_date, shop_id, spu_id, category_id, **sale_qty int**, **sale_amount bigint**, **refund_qty int**, created_at/updated_at | `uk_shop_spu_date(shop_id, spu_id, stat_date)`、`idx_spu_date(spu_id, stat_date)` |
-| `t_report_daily_rider` | id, tenant_id, stat_date, rider_id, **delivery_count int**, **on_time_count int**, **on_time_rate decimal(5,2)**, **online_minutes int**, **income_amount bigint**, **penalty_amount bigint**, **avg_delivery_minutes int**, created_at/updated_at | `uk_rider_date(rider_id, stat_date)` |
+| `t_report_daily_rider` | id, tenant_id, stat_date, rider_id, **delivery_count int**, **on_time_count int**, **on_time_rate decimal(5,2)**, **online_minutes int**, **income_amount bigint**, **penalty_amount bigint**, **avg_delivery_minutes int**, **rating decimal(3,2)**, created_at/updated_at | `uk_rider_date(rider_id, stat_date)` |
 | `t_track_event` | id, tenant_id, **event_type varchar(32)**（`HOME_EXPOSE`/`SHOP_CLICK`/`ADD_CART`/`ORDER_SUBMIT`/`PAY_SUCCESS`）, **user_id bigint NULL**, **device_id varchar(64)**, **biz_type varchar(32)**, **biz_id bigint**, **source varchar(32)**, extra_json json, **event_at datetime(3)**, created_at | `idx_type_time(event_type, event_at)`、`idx_user_time(user_id, event_at)` |
 | `t_report_funnel_daily` | id, tenant_id, stat_date, **expose_count**, **click_count**, **cart_count**, **order_count**, **pay_count**, created_at | `uk_date(tenant_id, stat_date)` |
 
@@ -69,26 +70,38 @@
 | 11 | GET | `/api/v1/merchant/report/dashboard` | 商家中心看板（今日营业额/订单/待处理/热销 TOP5/近 7 日出餐时长） | `MERCHANT` |
 | 12 | GET | `/api/v1/merchant/report/orders` | `dateFrom,dateTo` 本店订单趋势 | `MERCHANT` |
 
-**新增错误码**：`80020 REPORT_DATE_INVALID`、`80021 REPORT_NOT_READY`（当日聚合未完成）。
+**新增错误码**（10xxxx 段，报表专属）：`100010 REPORT_DATE_INVALID`、`100011 REPORT_NOT_READY`（当日聚合未完成）。
 
 ---
 
 ## 需要新增/修改的文件
+
+### 阶段A（P0，约 5 个：工作台今日卡片 + 经营总览日粒度）
 
 | 类型 | 路径 |
 |---|---|
 | 改 | `pom.xml`（`<modules>` + `dependencyManagement` 增 `solo-eats-report`） |
 | 新 | `solo-eats-report/pom.xml`（依赖 `solo-eats-common`、`solo-eats-system`、`mybatis-plus`、`lombok`；**不依赖** order/product/delivery/settlement 模块，只读表） |
 | 改 | `solo-eats-app/pom.xml` |
-| 新 | `solo-eats-app/src/main/resources/db/migration/V17__report.sql` |
-| 新 | `solo-eats-report/src/main/java/com/soloeats/report/domain/entity/` `ReportDailyPlatform`、`ReportDailyShop`、`ReportDailySpu`、`ReportDailyRider`、`TrackEvent`、`ReportFunnelDaily`（6） |
-| 新 | 6 个 Mapper（其中 4 个含自定义聚合 SQL `@Select` 或 XML） |
-| 新 | `solo-eats-report/src/main/java/com/soloeats/report/job/ReportAggregateJob.java`（`@Scheduled(cron="0 30 1 * * ?")` 每日 01:30 聚合前一日；`@Scheduled` 每 5 分钟刷新工作台今日实时卡） |
-| 新 | `solo-eats-report/src/main/java/com/soloeats/report/service/ReportService.java` + `impl`（7 个查询 + 1 个重算） |
+| 新 | `solo-eats-app/src/main/resources/db/migration/V17__report.sql`（`t_report_daily_platform`、`t_report_daily_shop` 两张 + 其余四张一并建好但阶段A 不填充） |
+| 新 | `solo-eats-report/src/main/java/com/soloeats/report/domain/entity/ReportDailyPlatform.java`、`ReportDailyShop.java` |
+| 新 | 对应 2 个 Mapper |
+| 新 | `solo-eats-report/src/main/java/com/soloeats/report/job/ReportAggregateJob.java`（`@Scheduled(cron="0 30 2 * * ?")` 每日 02:30 聚合前一日——**必须在商家/骑手账单 02:00 生成之后**，否则财务字段缺数；`@Scheduled` 每 5 分钟刷新工作台今日实时卡） |
+| 新 | `solo-eats-report/src/main/java/com/soloeats/report/service/ReportService.java` + `impl`（dashboard + overview） |
+| 新 | `solo-eats-report/src/main/java/com/soloeats/report/service/view/DashboardView.java`、`OverviewSeries.java` |
+| 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminReportController.java`（dashboard/overview 两端点） |
+| 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/MerchantReportController.java`（商家中心看板今日卡片） |
+
+### 阶段B（P1，约 9 个：完整 6 张报表 + 漏斗 + 排行 + 埋点）
+
+| 类型 | 路径 |
+|---|---|
+| 新 | `solo-eats-report/src/main/java/com/soloeats/report/domain/entity/` `ReportDailySpu`、`ReportDailyRider`、`TrackEvent`、`ReportFunnelDaily`（4） |
+| 新 | 对应 4 个 Mapper（含自定义聚合 SQL） |
+| 新 | `solo-eats-report/src/main/java/com/soloeats/report/service/ReportService.java` 追加（funnel/products/shops/riders/finance/users + rebuild） |
 | 新 | `solo-eats-report/src/main/java/com/soloeats/report/service/TrackService.java` + `impl`（埋点批量落库） |
-| 新 | `solo-eats-report/src/main/java/com/soloeats/report/service/view/`（`DashboardView`、`OverviewSeries`、`FunnelView`、`ProductRankView`、`ShopRankView`、`RiderAnalysisView`、`FinanceReportView`） |
-| 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminReportController.java` |
-| 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/MerchantReportController.java` |
+| 新 | `solo-eats-report/src/main/java/com/soloeats/report/service/view/`（`FunnelView`、`ProductRankView`、`ShopRankView`、`RiderAnalysisView`、`FinanceReportView`） |
+| 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminReportController.java`（追加其余端点） |
 | 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/TrackController.java` |
 | 新 | `solo-eats-report/src/test/java/com/soloeats/report/service/impl/ReportServiceImplTest.java`（空数据、单日、跨月三组） |
 
@@ -100,6 +113,7 @@
 |---|---|
 | **只读原则** | `report` 模块**只 SELECT**，不写任何业务表。聚合结果只写 `t_report_*` 与 `t_track_event` |
 | **聚合口径** | GMV = 已完成订单 `pay_amount` 之和（**不含**已取消/已退款）；退款率 = 退款单数 / 支付单数；客单价 = GMV / 已完成订单数（分母 0 时返回 0 而非 NULL）；佣金收入取 `t_settlement_item` 的佣金项之和 |
+| **准时率数据源（8.7 衔接）** | 骑手 `on_time_count`/`on_time_rate` 依赖 **T07 阶段B 落地的 `t_delivery_order.promise_deliver_at`**：`on_time_count = 当日 delivered_at <= promise_deliver_at 的配送单数`，`on_time_rate = on_time_count / delivery_count`。若 T07 未回填该字段，准时率恒为 0，**本卡须在依赖表中确认 T07 已交付**（见 T07「承诺送达时间」约束）；骑手 `rating` 取 `t_rider.rating` 快照 |
 | **时效** | 当日数据用「实时卡 SQL 直查」（限制单日、走 `idx_shop_status`/`idx_user_status`）而非聚合表；历史用聚合表。二者接口同一个，内部按 `stat_date` 是否今天分流 |
 | **幂等重算** | `rebuild(date)` 先 `DELETE FROM t_report_daily_* WHERE stat_date=?` 再重算，**同一事务**；重复调用结果一致 |
 | **长事务** | 聚合任务**必须分页**扫订单（每页 1000，`id > lastId`），**禁止**一次性 `selectList` 全量 |

@@ -1,8 +1,16 @@
-# T13 用户端 UniApp（49 页，P0 先做 12 页）
+# T13 用户端 UniApp（49 页，P0 先做 13 页）
 
-> 优先级：**P0**（阶段A 12 页）/ **P1**（阶段B 其余 37 页）
+> 优先级：**P0**（阶段A 13 页）/ **P1**（阶段B 其余 36 页）
 > 所属：新建 `solo-eats-uniapp-user/`（本仓库子目录，见 README Q5）
-> 分两段：**阶段A（首页→店铺→购物车→下单→支付→订单/取餐码）→ 阶段B（搜索/消息/会员/评价/售后）**
+> 分两段：**阶段A（首页→店铺→购物车→下单→支付→订单/取餐码→评价）→ 阶段B（搜索/消息/会员/售后/营销）**
+>
+> **与规格书的两处偏差（待产品确认）**：① 规格书 1.6 用户端 P0 含「**支付宝沙箱支付**」，本卡阶段A 支付走 **Mock 网关**（`/payments/pay` 复用既有 Mock 通道）；② 评价已从阶段B 提入阶段A（P0），见下。
+
+**支付偏差的落地设计（Q6，已定方案）**：
+- **P0 用 Mock 通道打通全链路**：用户端调用 `POST /api/v1/payments/pay`（body `{orderId, channel}`），后端 `PaymentService` 按 `channel` 路由到 `MockPaymentGateway`（`channel=mock`）或未来 `AlipaySandboxGateway`（`channel=alipay`）。前端 `channel` 由后端「可用支付渠道」接口下发，**前端不写死渠道**。
+- **支付宝沙箱作为 P1 增强，不阻塞 P0**：规格书 1.5 明确支付宝沙箱【保留】（个人可注册），13 章要求"支付需真实走通支付宝沙箱"。方案是**新增独立后端卡（payment 沙箱接入）**，在 `PaymentGateway` 抽象下加 `AlipaySandboxGateway` 实现（发起预下单返回沙箱支付页/唤起，回调验签复用 `PaymentSignUtils`），**不改动** `PaymentService.pay` 的既有契约与 `MockPaymentGateway`。
+- **前端零改造**：因渠道由后端下发 + `channel` 参数透传，前端只需在支付结果页兼容「跳转沙箱支付页」与「立即成功」两种返回，其余逻辑不变。**本卡阶段A 只验证 Mock 通道**，沙箱通道联调由沙箱接入卡独立验收。
+- 需产品确认的点（README Q6）：P0 验收口径是否接受「Mock 支付打通 + 沙箱代码就绪但未开通个人沙箱」；若必须真实沙箱，则沙箱接入卡须并入 P0。
 
 ---
 
@@ -34,9 +42,11 @@
 | **T06** | `POST /c/auth/sms-code`、`POST /c/auth/login`、`/c/users/me`、`/c/addresses`、`/c/wallet` |
 | **T05** | `GET /c/shops/{shopId}/menu`、`GET /c/spus/{spuId}`、`POST /c/reviews` |
 | **T04** | `GET /c/shops`、`GET /c/shops/{id}`、`POST /c/shops/{id}/delivery-check` |
+| **T07** | `POST /c/freight/estimate`（配送费试算，属 T07 阶段B）、`GET /c/deliveries/{deliveryId}/track`（轨迹） |
 | **T10** | `GET /c/home?pageCode=USER_HOME`（首页楼层；未完成前可用静态兜底） |
 | **T08** | `WS /ws`、`/messages`（消息中心；未完成前用轮询） |
-| 既有后端 | `POST /api/v1/orders`、`GET /api/v1/orders`、`GET /api/v1/orders/{id}`、`POST /api/v1/orders/{id}/cancel`、`POST /api/v1/payments/{orderNo}/pay`、`POST /api/v1/payments/callback`（Mock） |
+| 既有后端 | `POST /api/v1/orders`、`POST /api/v1/orders/{id}/cancel`、`POST /api/v1/payments/pay`（body: `{orderId, channel}`）、`POST /api/v1/payments/callback`（Mock） |
+| **订单查询（待补）** | `GET /api/v1/orders`、`GET /api/v1/orders/{id}` **当前后端不存在**（`OrderController` 仅 POST 动作）。须在开工前回写 order 模块补齐「用户端订单列表/详情查询」接口（含时间轴、配送/自取两类口径，见 5.2.6），或另立补充卡；本卡接口 #12/#13 依赖此补项 |
 
 ---
 
@@ -67,9 +77,9 @@
 | 8 | POST | `/api/v1/c/shops/{id}/delivery-check` | 配送范围/起送价校验 |
 | 9 | POST | `/api/v1/c/freight/estimate` | 配送费试算 |
 | 10 | POST | `/api/v1/orders` | 下单（带 `Idempotency-Key`） |
-| 11 | POST | `/api/v1/payments/{orderNo}/pay` | 发起支付 |
-| 12 | GET | `/api/v1/orders?status=` | 订单列表（Tab 筛选） |
-| 13 | GET | `/api/v1/orders/{id}` | 订单详情 + 时间轴 |
+| 11 | POST | `/api/v1/payments/pay` | 发起支付（body `{orderId, channel}` + `Idempotency-Key` 头） |
+| 12 | GET | `/api/v1/orders?status=` | 订单列表（Tab 筛选）——**待 order 模块补充，见「前置依赖」** |
+| 13 | GET | `/api/v1/orders/{id}` | 订单详情 + 时间轴——**待 order 模块补充，见「前置依赖」** |
 | 14 | POST | `/api/v1/orders/{id}/cancel` | 取消订单 |
 | 15 | GET | `/api/v1/c/deliveries/{deliveryId}/track` | 配送追踪 |
 | 16 | POST | `/api/v1/c/reviews` | 评价 |
@@ -112,10 +122,11 @@
 | `src/pages/order/Detail.vue` | 订单详情 + 时间轴（配送/自取两套） |
 | `src/pages/order/PickupCode.vue` | 取餐码（大字 + 二维码 + 门店导航 + 我已取餐） |
 | `src/pages/order/Track.vue` | 配送追踪（地图 + 骑手卡片 + 预计送达） |
+| `src/pages/review/ReviewForm.vue` | 评价提交（5 星 + 标签，`POST /c/reviews`，重复提交拦截）——**P0 项，从阶段B 提入** |
 
-### 阶段B 页面（37 页，按模块分组，每批 6~8 页）
+### 阶段B 页面（36 页，按模块分组，每批 6~8 页）
 
-`search/*`（4）、`message/*`（5）、`mine/*`（8）、`address/*`（3）、`review/*`（3）、`afterSale/*`（4）、`member/*`（5）、`marketing/*`（5）
+`search/*`（4）、`message/*`（5）、`mine/*`（8）、`address/*`（3）、`review/*`（2，评价详情/列表）、`afterSale/*`（4）、`member/*`（5）、`marketing/*`（5）
 
 ---
 
@@ -155,7 +166,7 @@ cd solo-eats-uniapp-user && npm ci && npm run build:h5
 # 7) 下单：提交成功跳支付 → 点"模拟支付成功" → 跳订单详情
 # 8) 自取单：订单详情显示取餐码（6 位），可点"我已取餐"
 # 9) 订单列表：6 个 Tab 数量与后端一致
-# 10) 评价（阶段B）：完成后可提交 5 星 + 标签，重复提交不新增
+# 10) 评价（阶段A，P0）：提交 5 星 + 标签成功，重复提交不新增
 ```
 
 ---

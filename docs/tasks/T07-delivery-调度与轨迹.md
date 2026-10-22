@@ -42,6 +42,7 @@
 | **T01/T02** | `@RequireRole(Roles.RIDER)`、`@RequirePermission`、`TenantContext` |
 | **T03** | `FileStoragePort`（骑手证件照、送达留证照片） |
 | 既有表（**不可改结构语义**） | `t_delivery_order`（`delivery_no, order_id, shop_id, rider_id, status, pickup_*, receiver_*, distance_m, delivery_fee, dispatch_count, dispatch_expire_at, accepted_at, picked_up_at, delivered_at, cancel_reason, version`）、`t_dispatch_record`、`t_rider_income`（`uk_delivery`）、`t_order_exception` |
+| **既有表 Expand 增列（8.7 准时达）** | `t_delivery_order` **只增列** `promise_deliver_at datetime(3) NULL`（承诺送达时间，接单时按"预计出餐时长 + 配送时长"回填，见下方「关键实现约束 → 承诺送达时间」）；不改原列、不改实体既有方法签名（新增字段用 MyBatis-Plus 自动映射）。此列是 T11 骑手准时率、T16 超时罚款的数据来源，**必须本卡落地** |
 | 既有类（**不可改方法签名**） | `com.soloeats.delivery.domain.entity.DeliveryOrder`、`RiderIncome`；`domain/enums/DeliveryOrderStatus`；`service/DeliveryService` + `impl/DeliveryServiceImpl`；`mapper/DeliveryOrderMapper`、`RiderIncomeMapper`；测试 `DeliveryServiceImplTest` |
 | 既有调用方 | `solo-eats-order` 的 `DeliveryFulfillmentApplicationService`、`RiderDispatchResult` 通过 `DeliveryService` 派单/接单；`solo-eats-app` 的 `OrderController` 有骑手动作接口（`RiderActionRequest`） |
 | 既有配置 | `app.dispatch.expire-seconds=15`、`max-retry=3` |
@@ -169,6 +170,7 @@
 | **运费试算** | 计算顺序：起步价 → 距离阶梯（每 `per_step_distance_m` 加 `per_step_fee`，封顶 `max_distance_m`）→ 时段加价（高峰 11:00-13:00 / 17:00-19:00、夜间 22:00-06:00）→ 恶劣天气（读配置开关）→ 重量/楼层 → 满额减免（`free_over_amount`）。**自取单直接返回 0**。全部 `bigint` 分 |
 | **配送费写入订单** | 下单时（`order` 模块）调用 `FreightService.estimate()`；本卡只提供接口，**不改 `OrderApplicationService`**。若需要联动，在 T05/T07 之外单独开卡 |
 | **改派** | 改派必须：校验原骑手状态允许释放 → `t_delivery_order.rider_id` 置空 + `status=待接单` + `dispatch_count=0` → 写 `t_dispatch_record(action=REASSIGN)`。**不得**改 `order_id`/`delivery_no` |
+| **承诺送达时间（8.7 准时达）** | 骑手接单时回填 `promise_deliver_at = now + 预计出餐时长（`t_shop.prep_minutes`）+ 配送时长（按 `distance_m` / 路况估算，本卡用固定 `distance_m / avg_speed` 估算法，`avg_speed` 可配）`。**配送超时判定**：定时任务（每分钟扫一次）找出 `status IN (配送中) AND promise_deliver_at < now AND delivered_at IS NULL` 的配送单，记录超时（写 `t_delivery_order` 超时标记或 `t_rider_income` 罚款项）。此字段是 **T11 骑手准时率（`on_time_count`/`on_time_rate`）** 与 **T16 超时罚款** 的唯一数据来源，**不得省略** |
 | **隐私** | 骑手看用户手机号必须脱敏（`138****8000`），日志不得明文；骑手身份证 `id_card_cipher` 加密 |
 | **多租户** | 全部新表带 `tenant_id` |
 | **异常上报** | 写 `t_rider_ping_anomaly` 同时写 `t_order_exception`（既有表），后者驱动平台异常订单池 |

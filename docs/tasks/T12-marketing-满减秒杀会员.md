@@ -1,8 +1,9 @@
 # T12 marketing-满减 · 折扣 · 秒杀 · 红包 · 签到 · 邀请 · 会员 · 积分
 
-> 优先级：**P1**（P0 只做「平台级单档满减」，见 README Q3）
+> 优先级：**P0（阶段A-0：平台级单档满减 + 试算/分摊，供下单链路）** / **P1（阶段A：满减/折扣 + 秒杀）→ 阶段B（会员等级/成长值/权益 + 积分/签到/邀请/红包）**
 > 所属模块：`solo-eats-marketing`（增量改造）+ `solo-eats-app`
-> 分两段：**阶段A（满减/折扣 + 秒杀）→ 阶段B（会员等级/成长值/权益 + 积分/签到/邀请/红包）**
+> 分三段：**阶段A-0（P0 提前包，约 3 个文件）→ 阶段A（满减/折扣 + 秒杀）→ 阶段B（会员等级/成长值/权益 + 积分/签到/邀请/红包）**
+> 说明：README Q3 已确认「P0 只做平台级单档满减」；9.8 优惠分摊规则要求满减参与分摊，故必须在下单链路（批次 4 前）提前交付阶段A-0，否则 P0 满减分摊无着落。规格书 1.6 平台后台 P0 亦含「基础券」——券模板/用户券后端已既有实现，本卡不重复；其**管理页面**归 T17 阶段A 提级（见 T17）。
 
 ---
 
@@ -104,22 +105,33 @@
 
 ## 需要新增/修改的文件
 
+### 阶段A-0（P0 提前包，约 3 个：平台级单档满减 + 试算/分摊）
+
+| 类型 | 路径 |
+|---|---|
+| 新 | `solo-eats-app/src/main/resources/db/migration/V18__marketing_promotion.sql`（`t_promotion`、`t_promotion_rule`、`t_promotion_scope`、`t_seckill_activity`、`t_seckill_item`、`t_seckill_order` 六张一次建齐；阶段A-0 只填充满减相关，秒杀表由阶段A 使用） |
+| 新 | `solo-eats-marketing/src/main/java/com/soloeats/marketing/domain/entity/Promotion.java`、`PromotionRule.java`、`PromotionScope.java` |
+| 新 | 对应 3 个 Mapper |
+| 新 | `.../service/PromotionService.java` + `impl`（**P0 版仅支持平台级单档满减**：活动匹配 + 试算 + 分摊；阶梯/折扣/商家满减在阶段A 补齐） |
+| 新 | `.../service/DiscountApportioner.java`（分摊算法：按折后金额比例 + 余数归最大项，**与 9.7 一致**） |
+| 新 | `.../service/view/MarketingCalculateResult.java`、`DiscountApportionItem.java` |
+| 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/MarketingClientController.java`（`POST /c/marketing/calculate` 试算，供下单链路调用） |
+| 新 | `solo-eats-marketing/src/test/java/com/soloeats/marketing/service/DiscountApportionerTest.java`（余数归最大项、合计=总额、单项全免三组） |
+
+> 阶段A-0 必须在 **order 模块下单链路（批次 4）** 前完成；否则 P0 满减无法参与 9.8 分摊。
+
 ### 阶段A（15 个）
 
 | 类型 | 路径 |
 |---|---|
-| 新 | `solo-eats-app/src/main/resources/db/migration/V18__marketing_promotion.sql` |
-| 新 | `solo-eats-marketing/src/main/java/com/soloeats/marketing/domain/entity/` `Promotion`、`PromotionRule`、`PromotionScope`、`SeckillActivity`、`SeckillItem`、`SeckillOrder`（6） |
+| 新 | `solo-eats-marketing/src/main/java/com/soloeats/marketing/domain/entity/` `SeckillActivity`、`SeckillItem`、`SeckillOrder`（3） |
 | 新 | `.../domain/enums/PromotionType.java`、`PromotionStatus.java`、`SeckillStatus.java` |
-| 新 | 6 个 Mapper |
-| 新 | `.../service/PromotionService.java` + `impl`（活动匹配 + 阶梯计算 + 分摊） |
+| 新 | 3 个 Mapper |
+| 新 | `.../service/PromotionService.java`（**扩展**：阶梯满减/折扣/商家满减/叠加开关） |
 | 新 | `.../service/SeckillService.java` + `impl`（预占/释放/回补） |
-| 新 | `.../service/DiscountApportioner.java`（分摊算法：按折后金额比例 + 余数归最大项，**与 9.7 一致**） |
-| 新 | `.../service/view/`（`PromotionView`、`MarketingCalculateResult`、`DiscountApportionItem`、`SeckillSessionView`） |
+| 新 | `.../service/view/PromotionView.java`、`SeckillSessionView.java` |
 | 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminPromotionController.java` |
 | 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminSeckillController.java` |
-| 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/MarketingClientController.java` |
-| 新 | `solo-eats-marketing/src/test/java/com/soloeats/marketing/service/DiscountApportionerTest.java`（余数归最大项、合计=总额、单项全免三组） |
 | 新 | `solo-eats-marketing/src/test/java/com/soloeats/marketing/service/impl/SeckillServiceImplTest.java`（并发 200 不超卖） |
 
 ### 阶段B（15 个）

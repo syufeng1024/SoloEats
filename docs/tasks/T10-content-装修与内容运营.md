@@ -71,7 +71,7 @@
 | 13 | GET | `/api/v1/c/search/suggest?keyword=` | 联想词（含热搜 Top10 + 默认词 + 屏蔽词过滤） | 白名单 |
 | 14 | GET | `/api/v1/c/app/version?appType=1&currentCode=100` | 最新版本 + `forceUpdate` + `hasUpdate`；灰度按 `userId % 100 < grayPercent` 判定 | 白名单 |
 
-**新增错误码**（8xxxx 追加）：`80010 CONTENT_FLOOR_INVALID`（引用的类目/店铺/商品不存在）、`80011 CONTENT_VERSION_EXISTS`。
+**新增错误码**（9xxxx 段追加，与 T08/T09 同段不同码值）：`90020 CONTENT_FLOOR_INVALID`（引用的类目/店铺/商品不存在）、`90021 CONTENT_VERSION_EXISTS`。
 
 ---
 
@@ -105,7 +105,7 @@
 | **首页聚合性能** | `GET /c/home` P95 ≤300ms：一次性查 5 张表后用内存组装，**禁止**在楼层循环里查店铺/商品；推荐店铺/商品各限 10 条；结果缓存 Redis `home:USER_HOME:v{publishVersion}`，TTL 5min，发布时 `DEL` |
 | **生效时间** | 所有内容按 `status=1` **且** `now BETWEEN effective_from AND effective_to`（`effective_to` 为 NULL 视为长期）过滤；SQL 里判断，不在 Java 过滤 |
 | **投放人群** | P0 只实现 `audience=0 全部` / `1 新客` / `2 会员`；`3 指定用户` 落库但**不生效**（`TODO(P1)`），前端不会看到 |
-| **引用校验** | 发布前必须校验 `config_json` 里的 `categoryId/shopId/spuId` 存在且已上架/营业，否则 `80010` 并列出缺失项 |
+| **引用校验** | 发布前必须校验 `config_json` 里的 `categoryId/shopId/spuId` 存在且已上架/营业，否则 `90020` 并列出缺失项 |
 | **版本灰度** | `grayPercent=0` 全量不发；`100` 全量发；其余按 `userId % 100 < grayPercent`；**未登录用 `deviceId` hash** |
 | **强制更新** | `forceUpdate=1` 且 `hasUpdate=true` 时前端阻断；**必须**同时校验 `versionCode > currentCode` |
 | **Banner 统计** | `view_count` 在 `/c/banners` 里异步 +1（Redis 累加，定时任务每 5min 刷回 DB），`click_count` 由前端埋点接口 +1 |
@@ -131,7 +131,7 @@ curl -s -X POST http://localhost:8080/api/v1/admin/content/home/floors -H "Autho
 # 发布（引用不存在类目 → 失败）
 curl -s -X POST http://localhost:8080/api/v1/admin/content/home/publish -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{"pageCode":"USER_HOME"}'
-# 断言：code=80010（若 categoryId 不存在）
+# 断言：code=90020（若 categoryId 不存在）
 
 # 用户端首页
 curl -s "http://localhost:8080/api/v1/c/home?pageCode=USER_HOME"

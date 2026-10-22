@@ -1,8 +1,8 @@
 # T16 settlement-抽佣规则 · 提现审核 · 资金流水（补充卡）
 
-> 优先级：**P1** · 所属模块：`solo-eats-settlement`（增量改造）+ `solo-eats-app`
-> 单段执行（约 16 个文件）
-> 说明：本卡不在团队最初的 T01~T15 清单内，是架构师识别的**缺口**——现状只有「结算单 + 明细」，缺规格书 4.8 明确要求的**三级抽佣规则、提现审核、资金流水**。
+> 优先级：**P0（阶段A：结算单审核→模拟打款 + 提现最小闭环）/ P1（阶段B：三级抽佣规则引擎 + 资金流水 + 提现审核完整）** · 所属模块：`solo-eats-settlement`（增量改造）+ `solo-eats-app`
+> 分两段执行：**阶段A（约 8 个文件）→ 阶段B（约 8 个文件）**
+> 说明：本卡不在团队最初的 T01~T15 清单内，是架构师识别的**缺口**——现状只有「结算单 + 明细」，缺规格书 4.8 明确要求的**三级抽佣规则、提现审核、资金流水**。规格书 1.6 平台后台 P0 明确含「**结算单（模拟打款）**」，故拆出 P0 先行段（阶段A），确保 P0 验收（13 章「通过率 100%」）不因本卡排 P1 而缺失。
 
 ---
 
@@ -39,9 +39,9 @@
 | 依赖 | 具体依赖物 |
 |---|---|
 | **T03** | `Merchant.commission_rate`（商家级费率）、`t_merchant_settlement_account`（提现收款账户） |
-| **T07** | `t_rider`、`t_rider_income`（骑手收入）、`t_rider_fee_rule`（罚款/补贴） |
+| **T07** | `t_rider`、`t_rider_income`（骑手收入）、`t_rider_fee_rule`（罚款/补贴）。**超时罚款数据源**：骑手配送超时由 T07 阶段B 依据 `t_delivery_order.promise_deliver_at` 判定并写入 `t_rider_income` 罚款项，本卡结算时直接聚合，**不重复判定超时** |
 | **T05** | `t_category`（品类级费率） |
-| **T12** | `t_promotion`（活动级费率，`promotion.extra_commission_rate` 若存在；否则本卡在 `t_commission_rule` 里以 `rule_scope=3` + `ref_id=promotionId` 承载） |
+| **T12** | `t_promotion`（活动级费率，`promotion.extra_commission_rate` 若存在；否则本卡在 `t_commission_rule` 里以 `rule_scope=4` + `ref_id=promotionId` 承载） |
 | 既有表（**不可改语义**） | `t_settlement_bill`（`uk_merchant_date`）、`t_settlement_item`、`t_rider_income`（`uk_delivery`）、`t_payout_order`、`t_order`（`settlement_status`、`settle_eligible_at`） |
 | 既有类（**不可改签名**） | `SettlementBill`、`SettlementItem` 实体；`SettlementService` + `impl`；`SettlementBillMapper`、`SettlementItemMapper`；`app/controller/AdminSettlementController.java`、`MerchantSettlementController.java`；测试 `SettlementServiceImplTest` |
 
@@ -49,7 +49,7 @@
 
 ## 数据模型
 
-迁移脚本：`V20__settlement_commission_payout.sql`
+迁移脚本：阶段A `V20__settlement_payout.sql`（提现列 + 结算单打款登记）；阶段B `V21__settlement_commission_fundflow.sql`（抽佣规则/记录 + 资金流水）
 
 | 表 | 关键字段 | 索引 |
 |---|---|---|
@@ -87,25 +87,36 @@
 
 ## 需要新增/修改的文件
 
+### 阶段A（P0，约 8 个：结算单审核→模拟打款 + 提现最小闭环）
+
 | 类型 | 路径 |
 |---|---|
-| 新 | `solo-eats-app/src/main/resources/db/migration/V20__settlement_commission_payout.sql` |
+| 新 | `solo-eats-app/src/main/resources/db/migration/V20__settlement_payout.sql`（`t_payout_order` 增补列 + 索引；结算单打款登记列） |
+| 新 | `solo-eats-settlement/src/main/java/com/soloeats/settlement/domain/enums/PayoutStatus.java`（含合法流转表：待审核→审核通过/已驳回、审核通过→打款中→已到账） |
+| 改 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminSettlementController.java`（**追加** 结算单审核/打款登记端点，不改已有 `/generate`、`/stats`） |
+| 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminPayoutController.java`（提现审核/打款/到账） |
+| 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/MerchantPayoutController.java`（含骑手提现申请，按角色分流） |
+| 新 | `solo-eats-settlement/src/main/java/com/soloeats/settlement/service/PayoutService.java` + `impl`（申请/审核/打款/到账，金额校验走既有余额） |
+| 新 | `solo-eats-settlement/src/test/java/com/soloeats/settlement/service/impl/PayoutServiceImplTest.java`（状态机非法流转 + 超额提现） |
+
+> 阶段A 的抽佣仍沿用既有 `default-commission-rate` 固定费率（不改），保证 P0「结算单模拟打款」先闭环；三级抽佣规则引擎在阶段B 替换。
+
+### 阶段B（P1，约 8 个：三级抽佣规则引擎 + 资金流水 + 提现审核完整）
+
+| 类型 | 路径 |
+|---|---|
+| 新 | `solo-eats-app/src/main/resources/db/migration/V21__settlement_commission_fundflow.sql` |
 | 新 | `solo-eats-settlement/src/main/java/com/soloeats/settlement/domain/entity/CommissionRule.java` |
 | 新 | `solo-eats-settlement/src/main/java/com/soloeats/settlement/domain/entity/CommissionRecord.java` |
 | 新 | `solo-eats-settlement/src/main/java/com/soloeats/settlement/domain/entity/FundFlow.java` |
-| 新 | `solo-eats-settlement/src/main/java/com/soloeats/settlement/domain/enums/RuleScope.java`、`FlowType.java`、`PayoutStatus.java`（含合法流转表） |
+| 新 | `solo-eats-settlement/src/main/java/com/soloeats/settlement/domain/enums/RuleScope.java`、`FlowType.java` |
 | 新 | `solo-eats-settlement/src/main/java/com/soloeats/settlement/mapper/CommissionRuleMapper.java`、`CommissionRecordMapper.java`、`FundFlowMapper.java` |
 | 新 | `solo-eats-settlement/src/main/java/com/soloeats/settlement/service/CommissionService.java` + `impl`（**规则命中 + 落抽佣记录**） |
-| 新 | `solo-eats-settlement/src/main/java/com/soloeats/settlement/service/PayoutService.java` + `impl`（申请/审核/打款/到账） |
 | 新 | `solo-eats-settlement/src/main/java/com/soloeats/settlement/service/FundFlowService.java` + `impl` |
 | 新 | `solo-eats-settlement/src/main/java/com/soloeats/settlement/service/view/`（`CommissionRuleView`、`CommissionResolveResult`、`CommissionRecordView`、`PayoutView`、`FundFlowSummary`） |
-| 改 | `solo-eats-settlement/src/main/java/com/soloeats/settlement/service/impl/SettlementServiceImpl.java`（**在生成账单明细时改为调用 `CommissionService.resolveAndRecord()`**，替换原固定 `default-commission-rate` 逻辑；**返回值与异常语义不变**） |
-| 改 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminSettlementController.java`（**追加** 3 个端点：commission-rules / payouts / fund-flows；不改已有 `/generate`、`/stats`） |
+| 改 | `solo-eats-settlement/src/main/java/com/soloeats/settlement/service/impl/SettlementServiceImpl.java`（**在生成账单明细时改为调用 `CommissionService.resolveAndRecord()`**，替换阶段A 固定 `default-commission-rate` 逻辑；**返回值与异常语义不变**） |
 | 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminCommissionController.java` |
-| 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminPayoutController.java` |
-| 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/MerchantPayoutController.java`（含骑手提现，按角色分流） |
 | 新 | `solo-eats-settlement/src/test/java/com/soloeats/settlement/service/impl/CommissionServiceImplTest.java`（优先级命中 4 组 + 生效期边界） |
-| 新 | `solo-eats-settlement/src/test/java/com/soloeats/settlement/service/impl/PayoutServiceImplTest.java`（状态机非法流转 + 超额提现） |
 
 ---
 
@@ -116,7 +127,7 @@
 | **优先级命中** | 严格 `活动级 > 商家级 > 品类级 > 全局默认`；同 scope 多条取 `priority DESC, effective_from DESC` 第一条；无任何命中时用 `app.settlement.default-commission-rate`（默认 `0.0600`）并记 `rule_id=NULL` |
 | **抽佣基数** | **商品实付**（`Σ order_item.payable_amount`），**不含**配送费与打包费；自取单同样抽佣（规格书 4.8「含自取订单」），但**不计履约服务费**（P0 履约服务费恒为 0） |
 | **可复算** | `t_commission_record` 必须落 `base_amount/rule_id/rule_scope/commission_rate/commission_amount`，满足"任意时刻可用订单数据重算出同一金额"。**金额计算一次，禁止多处重算** |
-| **结算公式** | `应结 = 营业额(商品实付) − 抽佣 − 平台承担优惠 + 商家承担优惠 − 退款冲抵`，其中"平台/商家承担优惠"取自 `t_order_discount.bearer` 与 `t_order.platform_discount/merchant_discount` |
+| **结算公式** | `应结 = 营业额(商品实付) − 抽佣 − 平台承担优惠 + 商家承担优惠 + 退款冲抵`，其中"退款冲抵"为**负项入账**（退款金额以负数参与累加，故公式用 `+`；若实现为减法请注释清楚），"平台/商家承担优惠"取自 `t_order_discount.bearer` 与 `t_order.platform_discount/merchant_discount`。**口径必须与规格书 4.8「营业额 − 抽佣 − 平台承担优惠 + 商家承担优惠 + 退款冲抵」一致** |
 | **售后期冻结** | 沿用既有 `settle_eligible_at`（`completed_at + after_sales_days`）；本卡不得改冻结逻辑，只在其上叠加抽佣明细 |
 | **提现门槛** | 商家可提现余额 = `Σ已结算已到账账单 − Σ已提现(非驳回)`；骑手可提现余额 = `Σ t_rider_income − Σ已提现`；超额抛 `60004`。商家无生效结算账户抛 `60006` |
 | **提现状态机** | `0待审核 → 1审核通过 → 2打款中 → 3已到账`；`0/1 → 4已驳回`；**禁止**跳级（`0→3`）。条件更新 `WHERE id=? AND status=?` |

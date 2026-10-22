@@ -85,8 +85,18 @@
 | 18 | PUT | `/api/v1/admin/members/{id}/status` | `{status}` 0正常 1禁用 | `member:user:update` |
 | 19 | GET | `/api/v1/admin/members/{id}/wallet/logs` | 调账/流水审计 | `member:wallet:list` |
 | 20 | POST | `/api/v1/admin/members/{id}/wallet/adjust` | `{amount（可负）,reason,requestId}` 手工调账 → 写流水 + `t_sys_oper_log` | `member:wallet:adjust` + `@Idempotent` |
+| 21 | GET | `/api/v1/c/users/agreement` | 当前隐私政策版本 + 用户确认状态（供 App 首启弹窗，见 9.11.0） | `C_USER` |
+| 22 | POST | `/api/v1/c/users/agreement/confirm` | `{agreementVersion}` 确认隐私协议（含撤回同意：`agree=false` 记录） | `C_USER` |
+| 23 | GET | `/api/v1/admin/member-tags` | 用户标签分群列表（标签定义 + 分群） | `member:tag:list` |
+| 24 | POST/PUT | `/api/v1/admin/member-tags`（+`/{id}`） | 标签定义（名称/规则/是否自动打标） | `member:tag:*` |
+| 25 | GET | `/api/v1/admin/members/{id}/addresses` | 后台地址管理（列表/查看/**异常标记**） | `member:user:detail` |
+| 26 | GET | `/api/v1/admin/members/export` | 用户列表导出（P1，占位） | `member:user:list` |
 
-**新增错误码**（8xxxx 或复用 1xxxx；建议新增 8xxxx 段）：`80001 MEMBER_NOT_FOUND`、`80002 MEMBER_DISABLED`、`80003 SMS_CODE_INVALID`、`80004 SMS_CODE_EXPIRED`、`80005 ADDRESS_LIMIT_EXCEEDED`、`80006 WALLET_BALANCE_NOT_ENOUGH`、`80007 WALLET_AMOUNT_INVALID`。
+> 接口 21/22（隐私协议确认记录）为合规必需（5.2.1:778、9.11.0:1543「撤回同意」入口），前端弹窗归 T13，但**后端落点必须在本卡**；接口 23/24（标签分群）属 member 模块职责（2.3:349、2.5:387），本卡补最小标签表 + 手动打标，自动打标（高频/沉默/新客）标注 `TODO`；接口 25 补后台地址管理与异常标记。
+
+**状态枚举补充**：`t_member_user.status` 扩为 `0正常 1禁用 2拉黑`（**新增 `2 拉黑`**，供 T09 投诉「拉黑/封禁联动」使用；原卡仅 0/1）。
+
+**新增错误码**（8xxxx 段：用户/会员，见 README 错误码分段）：`80001 MEMBER_NOT_FOUND`、`80002 MEMBER_DISABLED`、`80003 SMS_CODE_INVALID`、`80004 SMS_CODE_EXPIRED`、`80005 ADDRESS_LIMIT_EXCEEDED`、`80006 WALLET_BALANCE_NOT_ENOUGH`、`80007 WALLET_AMOUNT_INVALID`。
 
 ---
 
@@ -103,6 +113,8 @@
 | 新 | `solo-eats-member/src/main/java/com/soloeats/member/domain/entity/MemberWallet.java` |
 | 新 | `solo-eats-member/src/main/java/com/soloeats/member/domain/entity/MemberWalletLog.java` |
 | 新 | `solo-eats-member/src/main/java/com/soloeats/member/domain/entity/MemberSmsCode.java` |
+| 新 | `solo-eats-member/src/main/java/com/soloeats/member/domain/entity/MemberAgreementConfirm.java`（隐私协议确认记录：`agreement_version`、`agree`、`confirmed_at`） |
+| 新 | `solo-eats-member/src/main/java/com/soloeats/member/domain/entity/MemberTag.java`、`MemberTagRel.java`（标签定义 + 用户-标签关联） |
 | 新 | `solo-eats-member/src/main/java/com/soloeats/member/domain/enums/WalletBizType.java`、`WalletDirection.java`、`SmsScene.java` |
 | 新 | `solo-eats-member/src/main/java/com/soloeats/member/mapper/` 5 个 Mapper |
 | 新 | `solo-eats-member/src/main/java/com/soloeats/member/support/PhoneCipher.java`（AES-GCM 加解密 + SHA-256 hash + 脱敏，**唯一入口**） |
@@ -111,6 +123,8 @@
 | 新 | `solo-eats-member/src/main/java/com/soloeats/member/service/MemberProfileService.java` + `impl` |
 | 新 | `solo-eats-member/src/main/java/com/soloeats/member/service/MemberAddressService.java` + `impl` |
 | 新 | `solo-eats-member/src/main/java/com/soloeats/member/service/MemberWalletService.java` + `impl` |
+| 新 | `solo-eats-member/src/main/java/com/soloeats/member/service/MemberAgreementService.java` + `impl`（协议确认/撤回） |
+| 新 | `solo-eats-member/src/main/java/com/soloeats/member/service/MemberTagService.java` + `impl`（标签 CRUD + 手动打标） |
 | 新 | `solo-eats-member/src/main/java/com/soloeats/member/service/command/`（`SmsLoginCommand`、`SaveAddressCommand`、`WalletChangeCommand`、`AdjustWalletCommand`） |
 | 新 | `solo-eats-member/src/main/java/com/soloeats/member/service/view/`（`SmsLoginResult`、`MemberView`、`MemberDetailView`、`AddressView`、`WalletView`、`WalletLogView`） |
 | 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/ConsumerAuthController.java`（`/api/v1/c/auth/**`） |

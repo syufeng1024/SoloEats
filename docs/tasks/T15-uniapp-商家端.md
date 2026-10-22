@@ -1,8 +1,8 @@
-# T15 商家端 UniApp（9 页，P0 先做 6 页）
+# T15 商家端 UniApp（9 页，P0 先做 7 页）
 
-> 优先级：**P0**（阶段A 6 页）/ **P1**（阶段B 其余 3 页）
+> 优先级：**P0**（阶段A 7 页）/ **P1**（阶段B 其余 3 页）
 > 所属：新建 `solo-eats-uniapp-merchant/`（本仓库子目录）
-> 分两段：**阶段A（工作台→接单/拒单→出餐→自取核销→商品/门店）→ 阶段B（财务/评价/营销/消息）**
+> 分两段：**阶段A（工作台→接单/拒单→出餐→自取核销→商品/门店设置）→ 阶段B（财务/评价/营销/消息）**
 
 ---
 
@@ -33,7 +33,8 @@
 | **T04** | `GET/PUT /merchant/shops/{id}`、`PUT /merchant/shops/{id}/status`、`GET /merchant/shops`（多门店切换） |
 | **T05** | `GET /merchant/shop-spus`、`PUT /merchant/shop-spus/{id}`、`PUT /merchant/shop-spus/{id}/status`、`POST/DELETE /merchant/sold-out`、`PUT /merchant/skus/{skuId}/stock`（既有 `MerchantSkuController`） |
 | **T08** | `WS /ws`（新单强提醒） |
-| 既有后端 | `GET /api/v1/merchant/orders`、`POST /api/v1/merchant/orders/{id}/accept`、`/reject`、`/ready`（既有 `MerchantOrderController`，自取核销走订单接口） |
+| 既有后端 | `GET /api/v1/merchant/orders`（`MerchantOrderController` 仅列表）；接单/拒单/出餐/呼叫骑手在 `OrderController`：`POST /api/v1/orders/{orderId}/accept`、`/reject`、`/prepared`（注意：是 `prepared` 不是 `ready`）、`POST /api/v1/orders/{orderId}/merchant/call-rider` |
+| **自取核销（待补）** | `POST /api/v1/merchant/orders/{id}/pickup/verify` **当前后端不存在**，且全任务板无卡承接。须回写 T04 或 order 模块补充（含幂等键，见规格书 5.3.8）；本卡接口 #10 依赖此补项 |
 
 ---
 
@@ -55,13 +56,13 @@
 | 1 | POST | `/api/v1/auth/login` | 商家登录 |
 | 2 | GET | `/api/v1/merchant/shops` | 多门店列表（切换） |
 | 3 | PUT | `/api/v1/merchant/shops/{id}/status` | 营业状态开关 |
-| 4 | GET | `/api/v1/merchant/report/dashboard` | 工作台数据（T11；未完成前用订单列表聚合近似） |
+| 4 | GET | `/api/v1/merchant/report/dashboard` | 工作台数据（T11，P0 阶段未完成前**只展示今日订单量/待接单数**等可直查指标，**营业额等聚合金额待 T11 就绪后再展示**，不得前端求和） |
 | 5 | GET | `/api/v1/merchant/orders?status=` | 订单列表（Tab） |
 | 6 | GET | `/api/v1/merchant/orders/{id}` | 订单详情 |
-| 7 | POST | `/api/v1/merchant/orders/{id}/accept` | 接单 |
-| 8 | POST | `/api/v1/merchant/orders/{id}/reject` | 拒单（原因） |
-| 9 | POST | `/api/v1/merchant/orders/{id}/ready` | 标记出餐/备餐完成 |
-| 10 | POST | `/api/v1/merchant/orders/{id}/pickup/verify` | 自取核销（取餐码） |
+| 7 | POST | `/api/v1/orders/{orderId}/accept` | 接单（`OrderController`，非 `/merchant/orders/...`） |
+| 8 | POST | `/api/v1/orders/{orderId}/reject` | 拒单（原因） |
+| 9 | POST | `/api/v1/orders/{orderId}/prepared` | 标记出餐/备餐完成（动词为 `prepared`） |
+| 10 | POST | `/api/v1/merchant/orders/{id}/pickup/verify` | 自取核销（取餐码）——**待后端补充，见「前置依赖」** |
 | 11 | GET | `/api/v1/merchant/shop-spus?status=` | 商品列表 |
 | 12 | PUT | `/api/v1/merchant/shop-spus/{id}/status` | 上下架/估清 |
 | 13 | POST | `/api/v1/merchant/sold-out` | 批量估清 |
@@ -92,6 +93,7 @@
 | `src/pages/order/Receipt.vue` | 小票预览（模拟打印：生成图片可下载） |
 | `src/pages/pickup/Verify.vue` | 自取核销（扫码 + 手动输码） |
 | `src/pages/product/List.vue` | 商品管理（上下架/估清/库存） |
+| `src/pages/shop/ShopSetting.vue` | 门店基础设置（营业时间、营业状态、起送价、配送费）——**P0 项（规格书 1.6 商家端 P0 含"门店基础设置"），从阶段B 提入** |
 
 ### 阶段B（3 页）
 
@@ -99,7 +101,7 @@
 |---|---|
 | `src/pages/finance/Finance.vue` | 营业额/抽佣/结算明细（T16 + 既有 `/merchant/settlements`） |
 | `src/pages/review/Review.vue` | 评价查看与回复（T05） |
-| `src/pages/mine/Mine.vue` | 我的（门店设置、营业时间、消息、退出） |
+| `src/pages/mine/Mine.vue` | 我的（消息、退出、账号） |
 
 ---
 

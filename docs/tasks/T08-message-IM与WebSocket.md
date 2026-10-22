@@ -54,6 +54,9 @@
 | `t_push_log` | id, tenant_id, message_id, channel varchar(16)（WS/SITE/PUSH）, receiver_type, receiver_id, **status tinyint(0待发 1成功 2失败)**, error_msg, sent_at, created_at | `idx_status_time(status, created_at)` |
 | `t_im_session` | id, tenant_id, **session_no varchar(32)**, **order_id bigint NULL**, **user_id**, **peer_type tinyint(2商家 3骑手 4客服)**, **peer_id**, **last_message varchar(200)**, **last_message_at**, user_unread int, peer_unread int, **status tinyint(0进行中 1已结束 2只读)**, created_at/updated_at | `uk_order_peer(order_id, user_id, peer_type, peer_id)`、`idx_user(user_id, last_message_at)`、`idx_peer(peer_type, peer_id, last_message_at)` |
 | `t_im_message` | id, tenant_id, session_id, **sender_type tinyint(1用户 2商家 3骑手 4客服 5系统)**, sender_id, **msg_type tinyint(1文字 2图片 3订单卡片 4位置 5常用语)**, content varchar(2000), extra_json json, **read_flag tinyint**, created_at | `idx_session_time(session_id, created_at)` |
+| `t_notify_setting` | id, tenant_id, **receiver_type tinyint(1用户 2商家 3骑手)**, receiver_id, **notify_type tinyint(1订单 2营销 3系统 4会话)**, **enabled tinyint DEFAULT 1**, created_at/updated_at | `uk_receiver_type(receiver_type, receiver_id, notify_type)` |
+
+> `t_notify_setting` 补规格书 5.2.7:856「推送设置：用户可开关各类通知」。`PushService` 下发前必须查此表（默认开，无记录视为开启）。
 
 ---
 
@@ -75,6 +78,8 @@
 | 12 | POST | `/api/v1/im/sessions/{id}/messages` | `{msgType,content,extra}` 发送（同时 WS 推送对方） | 会话参与者 |
 | 13 | PUT | `/api/v1/im/sessions/{id}/read` | 清零未读 | 会话参与者 |
 | 14 | DELETE | `/api/v1/im/sessions/{id}` | 删除会话（软删/仅隐藏本人） | 会话参与者 |
+| 15 | GET | `/api/v1/notify/settings` | 当前登录者通知开关（各 `notifyType` 的 enabled） | 登录即可 |
+| 16 | PUT | `/api/v1/notify/settings` | `{notifyType, enabled}` 更新单个开关 | 登录即可 |
 
 **新增错误码**（9xxxx）：`90001 IM_SESSION_NOT_FOUND`、`90002 IM_SESSION_CLOSED`、`90003 IM_NOT_PARTICIPANT`、`90004 WS_UNAUTHORIZED`。
 

@@ -1,8 +1,23 @@
 # T17 web-运营后台与商家中心页面（补充卡）
 
-> 优先级：**P1** · 所属：`solo-eats-web`（Vue3 + Vite + Element Plus）
+> 优先级：**P0（批次 0：支撑 P0 功能的配置界面）/ P1（批次 1~4：其余页面）** · 所属：`solo-eats-web`（Vue3 + Vite + Element Plus）
 > 按批交付：每批 4~6 页（约 18 个文件/批），与后端卡一一对应
-> 说明：本卡不在团队最初的 T01~T15 清单内，是架构师识别的缺口——规格书 4.0/4.13 要求运营后台约 82 页、商家中心约 13 页，现状只有 5 个业务页。
+> 说明：本卡不在团队最初的 T01~T15 清单内，是架构师识别的缺口——规格书 4.0/4.13 要求运营后台约 82 页、商家中心约 13 页，现状只有 5 个业务页。规格书 13 章要求「后台每个可配置项必须真实驱动各端效果」，而支撑 P0 功能的配置（商家审核/门店/商品/基础券/工作台）若无界面，P0 验收（13 章「通过率 100%」）无法达成。故拆出「批次 0（P0 先行）」，在对应后端 P0 卡交付后即补齐其最小操作界面；其余完整页面按批次 1~4 排 P1。
+
+---
+
+## 商家中心独立工程（甲方已确认，本卡必须落实）
+
+规格书 1.7:297、2.1:314-321、9.4:1458、9.5:1462、13:1847、14.6 甲方确认 #1 六处要求：**平台运营后台**与**商家中心 Web** 为两个**独立前端工程**（独立仓库/构建/部署/域名），共用同一后端与 RBAC。
+
+**落地方案（本卡采用「同仓双入口」）**：
+1. 现有 `solo-eats-web` 继续作为**平台运营后台**（`/admin/**` + 系统管理），保持既有 5 个业务页与路由不动。
+2. 新建 `solo-eats-web-merchant/`（同仓库子目录，独立 `package.json` + `vite.config.ts` + `src/`），承载**商家中心**（`/merchant/**`）。两份工程各自独立 `npm run build`、独立产出 `dist/`、独立部署目录与访问域名，互不引用源码。
+3. **共享层抽离**：把 `api/http.ts`、`utils/money.ts`、`stores/auth.ts`、`constants/*` 等通用件放 `solo-eats-web/shared/`（或独立 `packages/web-shared/`），两工程通过 npm workspace / 相对依赖复用，**禁止**商家中心 `import` 运营后台的页面组件。
+4. **登录与 RBAC 复用**：商家中心仍调 `POST /api/v1/auth/login` + `GET /auth/menus`，靠 token 的 `userType/roles` 拿到「本商家/本门店」菜单；`X-Shop-Id` 多门店切换（见 README Q4）。
+5. **验收口径**：两条 `npm run build`（`solo-eats-web` + `solo-eats-web-merchant`）必须分别通过，且商家中心可**独立部署**到 `/merchant/` 域名访问（Nginx 分离），满足 13 章「独立工程」。
+
+> 本卡「批次 0」起的 `views/merchant/*` 页面一律归入 `solo-eats-web-merchant/`，不再写入 `solo-eats-web`。已有 `MerchantOrdersView` 等 3 个商家页面从 `solo-eats-web` 迁出到新工程（保留路径，避免回归）。
 
 ---
 
@@ -74,6 +89,28 @@
 
 ## 需要新增/修改的文件
 
+### 批次 0（P0 先行：支撑 P0 功能的配置界面，约 8 个 + 商家中心工程骨架）
+
+> 随对应后端 P0 卡交付后立即补齐，**不得等到批次 1~4**。目标：P0 验收时这些配置项可真实操作。
+
+| 页面 | 对应后端卡 | 说明 |
+|---|---|---|
+| `views/admin/merchant/ApplyListView.vue`、`AuditView.vue` | T03 | 商家入驻审核（P0） |
+| `views/admin/store/ShopListView.vue`、`ShopFormView.vue` | T04 | 门店管理（P0） |
+| `views/admin/product/SpuListView.vue` | T05 | 商品库基础列表（P0） |
+| `views/admin/marketing/CouponView.vue` | 既有券后端 | **基础券管理页（P0，1.6 平台后台 P0 含"基础券"）** |
+| 改 `views/AdminOverviewView.vue` | T11 阶段A | 工作台今日卡片（P0） |
+
+**商家中心独立工程骨架（批次 0 一并搭好）**：
+
+| 类型 | 路径 | 说明 |
+|---|---|---|
+| 新 | `solo-eats-web-merchant/package.json`、`vite.config.ts`、`index.html` | 独立工程（base `/merchant/`） |
+| 新 | `solo-eats-web-merchant/src/{main.ts,App.vue,router/index.ts,pages.json}` | 商家中心入口与路由 |
+| 新 | `solo-eats-web-merchant/src/api/http.ts` | 复用共享层的 axios 封装（`X-Shop-Id` 头） |
+| 改 | `solo-eats-web/shared/`（抽 `http.ts`/`money.ts`/`stores/auth.ts`/`constants/*`） | 两工程共用，禁止商家中心 import 运营后台页面组件 |
+| 迁 | `MerchantOrdersView.vue`、`MerchantProductsView.vue`、`MerchantSettlementsView.vue` | 从 `solo-eats-web` 迁到 `solo-eats-web-merchant/`（保留路径与逻辑） |
+
 ### 批次 1：框架与系统管理（18 个）
 
 | 类型 | 路径 |
@@ -91,11 +128,11 @@
 
 ### 批次 2：招商 · 门店 · 商品（16 个）
 
-`views/admin/merchant/{ApplyListView,AuditView,MerchantListView}.vue`、`views/admin/store/{ShopListView,ShopFormView,DeliveryAreaView}.vue`、`views/admin/product/{CategoryView,SpuListView,SpuFormView,TemplateView,SoldOutView,ReviewView}.vue`、`views/merchant/store/{ShopSettingView,PickupSettingView}.vue`、`api/{merchant,store,product}.ts`（扩展）
+`views/admin/merchant/{ApplyListView,AuditView,MerchantListView}.vue`、`views/admin/store/{ShopListView,ShopFormView,DeliveryAreaView}.vue`、`views/admin/product/{CategoryView,SpuListView,SpuFormView,TemplateView,SoldOutView,ReviewView}.vue`、`api/{merchant,store,product}.ts`（扩展）；商家中心侧：`solo-eats-web-merchant/src/views/store/{ShopSettingView,PickupSettingView}.vue`
 
 ### 批次 3：订单 · 配送 · 骑手（14 个）
 
-`views/admin/order/{OrderListView,OrderDetailView,AfterSaleView,ExceptionPoolView}.vue`、`views/admin/delivery/{RiderListView,RiderAuditView,DispatchCenterView,DeliveryListView,FreightTemplateView}.vue`、`views/merchant/order/{PickupVerifyView,ReceiptView}.vue`、`api/delivery.ts`
+`views/admin/order/{OrderListView,OrderDetailView,AfterSaleView,ExceptionPoolView}.vue`、`views/admin/delivery/{RiderListView,RiderAuditView,DispatchCenterView,DeliveryListView,FreightTemplateView}.vue`、`api/delivery.ts`；商家中心侧：`solo-eats-web-merchant/src/views/order/{PickupVerifyView,ReceiptView}.vue`
 
 ### 批次 4：资金 · 报表 · 客服 · 内容 · 营销（18 个）
 
@@ -121,7 +158,7 @@
 | **图表空数据** | 无数据必须显示空态而非报错 |
 | **响应式** | 运营后台最小 1366×768；商家中心最小 1024×768 |
 | **主题** | 运营后台橙色、商家中心深青绿（沿用既有 `styles/index.css` 变量，不新建主题体系） |
-| **构建** | `cd solo-eats-web && npm run build`（含 `vue-tsc --noEmit`）必须通过；**新增页面必须有 TS 类型**，不得 `any` 泛滥 |
+| **构建** | `cd solo-eats-web && npm run build`（含 `vue-tsc --noEmit`）必须通过；**商家中心工程** `cd solo-eats-web-merchant && npm run build` 同样必须通过；**新增页面必须有 TS 类型**，不得 `any` 泛滥 |
 
 ---
 
@@ -130,6 +167,8 @@
 ```bash
 cd solo-eats-web && npm ci && npm run build
 # 断言：vue-tsc 无 error；dist 生成成功
+cd solo-eats-web-merchant && npm ci && npm run build
+# 断言：商家中心独立工程 vue-tsc 无 error；dist 生成成功（独立工程验收，13 章「独立工程」）
 cd solo-eats-web && npm run test:unit
 # 断言：既有 money.spec.ts / datetime.spec.ts / debounce.spec.ts / orderStatus.spec.ts 全绿
 
