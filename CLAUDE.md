@@ -71,7 +71,7 @@ solo-eats-app/src/main/resources/db/migration/   # Flyway：V<序号>__<描述>.
 4. **异常**：抛 `BizException(ErrorCode)`，**不得**直接返回 `ApiResponse.fail` 或 `throw new RuntimeException`。新增错误码只能**追加**到 `ErrorCode`。
 5. **审计字段**：新表必须有 `created_at`、`updated_at`；配置类表加 `deleted tinyint DEFAULT 0`；关键表加 `version int unsigned DEFAULT 0`。
 6. **状态流转**：必须条件更新 `WHERE id=? AND status=?`；不匹配抛对应 `*_STATE_INVALID`。**禁止**先 SELECT 再 UPDATE。
-7. **幂等**：写接口加 `@Idempotent(bizType="...")`；下单/支付/退款/核销必带 `Idempotency-Key`。
+7. **幂等**：写接口加 `@Idempotent(key="...", ttlSeconds=...)`（注解只有 `key`/`ttlSeconds` 两个属性，**没有** `bizType`；`key` 留空则用方法签名+参数哈希）；下单/支付/退款/核销必带 `Idempotency-Key` 请求头。
 8. **租户**：新表带 `tenant_id bigint unsigned NOT NULL DEFAULT 1`；隔离靠 `TenantLineInnerInterceptor`（T02 落地），**禁止**在 SQL 里手写 `tenant_id = ?`。
 9. **脱敏**：手机号/身份证/银行卡加密入库、脱敏返回、**禁止**出现在日志。
 10. **`@Transactional`**：只包 DB 操作；文件上传、MQ 发送、外部 HTTP 必须放事务**外**。
