@@ -3,6 +3,7 @@ package com.soloeats.app.controller;
 import com.soloeats.app.dto.SaveUserRequest;
 import com.soloeats.common.api.ApiResponse;
 import com.soloeats.common.api.PageResult;
+import com.soloeats.common.auth.RequirePermission;
 import com.soloeats.common.auth.RequireRole;
 import com.soloeats.common.auth.Roles;
 import com.soloeats.common.idempotency.Idempotent;
@@ -30,6 +31,7 @@ public class AdminUserController {
 
     private final SysUserService sysUserService;
 
+    @RequirePermission("system:user:list")
     @GetMapping
     public ApiResponse<PageResult<SysUserView>> list(
             @RequestParam(required = false) Integer userType,
@@ -47,6 +49,7 @@ public class AdminUserController {
      * 防重窗口 60s，key 走注解默认的「方法签名 + 参数哈希」：
      * Idempotent 只有 key/ttlSeconds 两个属性，写死 key 会把所有管理员的新增请求一起挡掉。
      */
+    @RequirePermission("system:user:create")
     @Idempotent(ttlSeconds = 60)
     @PostMapping
     public ApiResponse<SysUserView> create(@Valid @RequestBody SaveUserRequest request) {
@@ -66,6 +69,7 @@ public class AdminUserController {
         return ApiResponse.ok(sysUserService.create(command));
     }
 
+    @RequirePermission("system:user:update")
     @PutMapping("/{id}")
     public ApiResponse<SysUserView> update(
             @PathVariable Long id,
@@ -84,6 +88,7 @@ public class AdminUserController {
         return ApiResponse.ok(sysUserService.update(id, command));
     }
 
+    @RequirePermission("system:user:update")
     @PutMapping("/{id}/status")
     public ApiResponse<Void> updateStatus(
             @PathVariable Long id,
@@ -92,6 +97,7 @@ public class AdminUserController {
         return ApiResponse.ok();
     }
 
+    @RequirePermission("system:user:assign")
     @PutMapping("/{id}/roles")
     public ApiResponse<Void> assignRoles(
             @PathVariable Long id,
@@ -100,6 +106,7 @@ public class AdminUserController {
         return ApiResponse.ok();
     }
 
+    @RequirePermission("system:user:reset")
     @PostMapping("/{id}/reset-password")
     public ApiResponse<Void> resetPassword(
             @PathVariable Long id,
@@ -108,6 +115,7 @@ public class AdminUserController {
         return ApiResponse.ok();
     }
 
+    @RequirePermission("system:user:delete")
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         sysUserService.delete(id);

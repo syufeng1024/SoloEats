@@ -3,6 +3,7 @@ package com.soloeats.app.controller;
 import com.soloeats.app.dto.SaveRoleRequest;
 import com.soloeats.common.api.ApiResponse;
 import com.soloeats.common.api.PageResult;
+import com.soloeats.common.auth.RequirePermission;
 import com.soloeats.common.auth.RequireRole;
 import com.soloeats.common.auth.Roles;
 import com.soloeats.system.service.SysRoleService;
@@ -29,6 +30,7 @@ public class AdminRoleController {
 
     private final SysRoleService sysRoleService;
 
+    @RequirePermission("system:role:list")
     @GetMapping
     public ApiResponse<PageResult<SysRoleView>> list(
             @RequestParam(required = false) Integer roleType,
@@ -38,11 +40,13 @@ public class AdminRoleController {
         return ApiResponse.ok(sysRoleService.page(roleType, status, pageNum, pageSize));
     }
 
+    @RequirePermission("system:role:create")
     @PostMapping
     public ApiResponse<SysRoleView> create(@Valid @RequestBody SaveRoleRequest request) {
         return ApiResponse.ok(sysRoleService.create(toCommand(request)));
     }
 
+    @RequirePermission("system:role:update")
     @PutMapping("/{id}")
     public ApiResponse<SysRoleView> update(
             @PathVariable Long id,
@@ -50,11 +54,13 @@ public class AdminRoleController {
         return ApiResponse.ok(sysRoleService.update(id, toCommand(request)));
     }
 
+    @RequirePermission("system:role:list")
     @GetMapping("/{id}/menus")
     public ApiResponse<RoleMenuIds> listMenus(@PathVariable Long id) {
         return ApiResponse.ok(new RoleMenuIds(sysRoleService.listMenuIds(id)));
     }
 
+    @RequirePermission("system:role:assign")
     @PutMapping("/{id}/menus")
     public ApiResponse<Void> assignMenus(
             @PathVariable Long id,

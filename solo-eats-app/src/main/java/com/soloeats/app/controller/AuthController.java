@@ -75,20 +75,22 @@ public class AuthController {
             if (request.userId() == null) {
                 throw new BizException(ErrorCode.PARAM_INVALID, "C_USER 必须提供 userId");
             }
-            principal = new UserPrincipal(request.userId(), null, null, null, Set.of(role));
+            principal = new UserPrincipal(null, request.userId(), null, null, null, null, Set.of(role));
         } else if (Roles.MERCHANT.equals(role)) {
             if (request.merchantId() == null) {
                 throw new BizException(ErrorCode.PARAM_INVALID, "MERCHANT 必须提供 merchantId");
             }
-            principal = new UserPrincipal(null, request.merchantId(), request.shopId(), null, Set.of(role));
+            principal = new UserPrincipal(null, null, null, request.merchantId(), request.shopId(), null, Set.of(role));
         } else if (Roles.RIDER.equals(role)) {
             if (request.riderId() == null) {
                 throw new BizException(ErrorCode.PARAM_INVALID, "RIDER 必须提供 riderId");
             }
-            principal = new UserPrincipal(null, null, null, request.riderId(), Set.of(role));
+            principal = new UserPrincipal(null, null, null, null, null, request.riderId(), Set.of(role));
         } else if (Roles.ADMIN.equals(role)) {
             principal = new UserPrincipal(
+                    null,
                     request.userId() == null ? 0L : request.userId(),
+                    null,
                     null,
                     null,
                     null,

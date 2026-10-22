@@ -45,6 +45,26 @@ public class PermissionGuard {
     }
 
     /**
+     * 取当前登录租户，供 T02 DataScope 与租户隔离查询使用。
+     */
+    public Long requireTenantId() {
+        Long tenantId = principal().tenantId();
+        if (tenantId == null) {
+            throw new BizException(ErrorCode.AUTH_FORBIDDEN, "令牌缺少 tenantId");
+        }
+        return tenantId;
+    }
+
+    /**
+     * 请求携带的租户必须与令牌一致，防止跨租户读取。
+     */
+    public void assertSameTenant(Long tenantId) {
+        if (tenantId == null || !Objects.equals(principal().tenantId(), tenantId)) {
+            throw new BizException(ErrorCode.AUTH_FORBIDDEN);
+        }
+    }
+
+    /**
      * 商家端写商品/库存必须落在令牌绑定的门店内。
      */
     public Long resolveShopId(Long requestedShopId) {

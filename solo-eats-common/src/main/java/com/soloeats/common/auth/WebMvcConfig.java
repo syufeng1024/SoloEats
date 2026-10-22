@@ -10,9 +10,11 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebMvcConfig implements WebMvcConfigurer {
 
     private final RoleAuthInterceptor roleAuthInterceptor;
+    private final PermissionInterceptor permissionInterceptor;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(roleAuthInterceptor).addPathPatterns("/api/**");
+        registry.addInterceptor(roleAuthInterceptor).addPathPatterns("/api/**").order(0);
+        registry.addInterceptor(permissionInterceptor).addPathPatterns("/api/**").order(1);
     }
 }

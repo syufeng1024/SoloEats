@@ -3,26 +3,34 @@ package com.soloeats.common.auth;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.soloeats.common.api.ApiResponse;
 import com.soloeats.common.exception.ErrorCode;
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+@Slf4j
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
 
+    /** 与 /auth/logout 约定一致：登出时写 jwt:blacklist:{jti}，TTL 取令牌剩余有效期。 */
+    public static final String BLACKLIST_KEY_PREFIX = "jwt:blacklist:";
+
     private final JwtUtils jwtUtils;
     private final ObjectMapper objectMapper;
+    private final StringRedisTemplate redisTemplate;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -31,7 +39,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String header = request.getHeader("Authorization");
         if (StringUtils.hasText(header) && header.startsWith("Bearer ")) {
             try {
-                AuthContext.set(jwtUtils.parse(header.substring(7)));
+                Claims claims = jwtUtils.parseClaims(header.substring(7));
+                if (isBlacklisted(claims.getId())) {
+                    writeUnauthorized(response);
+                    return;
+                }
+                AuthContext.set(jwtUtils.toPrincipal(claims));
             } catch (Exception ex) {
                 writeUnauthorized(response);
                 return;
@@ -41,6 +54,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } finally {
             AuthContext.clear();
+        }
+    }
+
+    /**
+     * Redis 不可用时放行并告警：黑名单只影响主动登出的令牌，
+     * 不能因缓存故障让全部请求 401；未登出的令牌仍受自身有效期约束。
+     */
+    private boolean isBlacklisted(String jti) {
+        if (!StringUtils.hasText(jti)) {
+            return false;
+        }
+        try {
+            return Boolean.TRUE.equals(redisTemplate.hasKey(BLACKLIST_KEY_PREFIX + jti));
+        } catch (Exception ex) {
+            log.warn("jwt blacklist check failed jti={} reason={}", jti, ex.getMessage());
+            return false;
         }
     }
 

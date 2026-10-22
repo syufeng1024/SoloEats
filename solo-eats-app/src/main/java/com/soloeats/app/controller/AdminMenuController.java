@@ -2,6 +2,7 @@ package com.soloeats.app.controller;
 
 import com.soloeats.app.dto.SaveMenuRequest;
 import com.soloeats.common.api.ApiResponse;
+import com.soloeats.common.auth.RequirePermission;
 import com.soloeats.common.auth.RequireRole;
 import com.soloeats.common.auth.Roles;
 import com.soloeats.system.service.SysMenuService;
@@ -29,16 +30,19 @@ public class AdminMenuController {
 
     private final SysMenuService sysMenuService;
 
+    @RequirePermission("system:menu:list")
     @GetMapping("/tree")
     public ApiResponse<List<MenuNode>> tree(@RequestParam(required = false) Integer menuType) {
         return ApiResponse.ok(sysMenuService.tree(menuType));
     }
 
+    @RequirePermission("system:menu:create")
     @PostMapping
     public ApiResponse<MenuNode> create(@Valid @RequestBody SaveMenuRequest request) {
         return ApiResponse.ok(sysMenuService.create(toCommand(request)));
     }
 
+    @RequirePermission("system:menu:update")
     @PutMapping("/{id}")
     public ApiResponse<MenuNode> update(
             @PathVariable Long id,
@@ -46,6 +50,7 @@ public class AdminMenuController {
         return ApiResponse.ok(sysMenuService.update(id, toCommand(request)));
     }
 
+    @RequirePermission("system:menu:delete")
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         sysMenuService.delete(id);
