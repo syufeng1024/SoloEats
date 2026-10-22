@@ -1,8 +1,10 @@
 # T02 system-租户 · 组织 · 审计日志 · 通知
 
-> 优先级：**P0**（租户/部门/岗位/字典/操作日志）；**P1**（邮件、公告）
+> 优先级：**P0**（租户/部门/岗位/字典/操作日志/**DataScope 行级数据权限**）；**P1**（邮件、公告）
 > 所属模块：`solo-eats-system` + `solo-eats-app`
-> 分两段：**阶段A（租户/套餐/部门/岗位/字典）→ 阶段B（操作日志/登录日志/邮件/公告）**
+> 分三段：**阶段A（租户/套餐/部门/岗位/字典）→ 阶段B（操作日志/登录日志/邮件/公告）→ 阶段C（DataScope 行级数据权限，P0 支撑项）**
+>
+> 说明：T01 声明「data_scope 本次只落库、强制生效在 T02 完成后收紧」，本卡阶段C 即兑现该承诺——落地 `data_scope` 五档的行级过滤，避免 RBAC 数据权限「只有落库没有生效」成为 P0 支撑项（规格书 1.6）的缺口。
 
 ---
 
@@ -119,7 +121,7 @@
 | 新 | `solo-eats-system/src/main/java/com/soloeats/system/service/SysOrgService.java` + `impl`（部门 + 岗位） |
 | 新 | `solo-eats-system/src/main/java/com/soloeats/system/service/SysDictService.java` + `impl` |
 | 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminTenantController.java`、`AdminDeptController.java`、`AdminPostController.java`、`AdminDictController.java`（4） |
-| 改 | `solo-eats-app/src/main/java/com/soloeats/app/config/MybatisPlusConfig.java`（注册 `TenantLineInnerInterceptor`，忽略表白名单：`t_sys_tenant`、`t_sys_menu`、`t_sys_package`、`t_idempotency`、`t_outbox_event`、`flyway_schema_history`） |
+| 改 | `solo-eats-app/src/main/java/com/soloeats/app/config/MybatisPlusConfig.java`（注册 `TenantLineInnerInterceptor`，忽略表白名单 = **系统表** + **21 张既有业务表** + 框架表，见下方「关键实现约束 → 历史表不补列」的完整清单） |
 
 ### 阶段B（17 个）
 
@@ -137,6 +139,19 @@
 | 改 | `solo-eats-app/src/main/resources/application.yml`（`spring.mail.host/port/username/password/properties.mail.smtp.auth`，全部走 `${MAIL_*:}` 环境变量；`app.auth.mock-login-enabled`、`app.tenant.enabled`） |
 | 改 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AuthController.java`（登录成功/失败写 `t_sys_login_log`） |
 
+### 阶段C（约 6 个：DataScope 行级数据权限）
+
+| 类型 | 路径 |
+|---|---|
+| 新 | `solo-eats-common/src/main/java/com/soloeats/common/datascope/DataScope.java`（注解：`deptAlias()`、`userAlias()`、`customSql()`，标注在需要数据权限过滤的 Mapper 方法上） |
+| 新 | `solo-eats-common/src/main/java/com/soloeats/common/datascope/DataScopeInnerInterceptor.java`（MyBatis-Plus 拦截器：解析当前用户 `data_scope`，自动拼接 `WHERE` 子句；须排在 `TenantLineInnerInterceptor` 之后、分页插件之前） |
+| 新 | `solo-eats-system/src/main/java/com/soloeats/system/service/DataScopeService.java` + `impl`（把 `data_scope` 档位 + 当前 `UserPrincipal` 解析为 SQL 过滤条件：`1全部` 不加、`2本租户`=`tenant_id=?`、`3本商家`=`merchant_id=?`、`4本门店`=`shop_id=?`、`5本人`=`user_id=?`/`rider_id=?`） |
+| 改 | `solo-eats-app/src/main/java/com/soloeats/app/config/MybatisPlusConfig.java`（注册 `DataScopeInnerInterceptor`） |
+| 改 | 各后台管理 Mapper/Service（商家列表/门店列表/订单列表/配送单列表/报表等只读接口）按需标注 `@DataScope`，明确列别名映射 |
+| 新 | `solo-eats-system/src/test/java/com/soloeats/system/service/DataScopeServiceTest.java`（五档各一组断言） |
+
+> 阶段C 依赖 T01 的 `SysUser`/`SysRole.data_scope` 字段与 `UserPrincipal`（T01-C 已加 `tenantId`，需在 T01 阶段C 补充 `merchantId/shopId/userId` 到 principal，见 T01 卡片「数据权限」约束的回写说明）。
+
 ---
 
 ## 关键实现约束
@@ -144,7 +159,8 @@
 | 项 | 约束 |
 |---|---|
 | **租户隔离方式** | 用 MyBatis-Plus `TenantLineInnerInterceptor`，**不要**在每个 Mapper XML 手写 `tenant_id = ?`。`tenant_id` 取值来源优先级：`TenantContext.get()` → 请求头 `X-Tenant-Id`（仅 ADMIN）→ 默认 1 |
-| **历史表不补列** | `t_order`/`t_sku`/`t_payment_order`/`t_settlement_bill`/`t_user_coupon` 等 **21 张既有表不加 `tenant_id`**（见 README Q1），隔离靠 `merchant_id/shop_id`。因此 `TenantLineInnerInterceptor` 的忽略表必须显式列出这些表，否则会报 `Unknown column 'tenant_id'` |
+| **DataScope 行级权限** | `data_scope` 五档过滤用 `DataScopeInnerInterceptor` 统一实现，**不要**在每个 Service 手写 `merchant_id=?`/`shop_id=?` 判断：`1全部` 不加过滤；`2本租户` 拼 `tenant_id=?`；`3本商家` 拼 `merchant_id=?`（当前商家）；`4本门店` 拼 `shop_id=?`；`5本人` 拼 `user_id=?`（或骑手 `rider_id`）。当前商家/门店/用户取值来自 `UserPrincipal`（T01 阶段C 补充 `merchantId/shopId/userId`）。**注意**：`data_scope` 只约束**平台后台角色**；商家中心/骑手端角色由既有 `PermissionGuard` 的 `merchant_id/shop_id/user_id` 校验兜底，二者不重叠。拦截器须排在 `TenantLineInnerInterceptor` 之后、分页插件之前 |
+| **历史表不补列** | **21 张既有业务表不加 `tenant_id`**（见 README Q1），隔离靠 `merchant_id/shop_id`。`TenantLineInnerInterceptor` 的忽略表必须**显式、完整**列出下列清单，否则会报 `Unknown column 'tenant_id'`。忽略表全集：<br>**① 21 张既有业务表**：`t_order`、`t_order_item`、`t_order_discount`、`t_order_status_log`、`t_sku`、`t_sku_stock`、`t_stock_lock`、`t_stock_log`、`t_coupon_template`、`t_user_coupon`、`t_user_coupon_log`、`t_payment_order`、`t_refund_order`、`t_refund_item`、`t_delivery_order`、`t_dispatch_record`、`t_order_exception`、`t_settlement_bill`、`t_settlement_item`、`t_rider_income`、`t_payout_order`<br>**② 公共/框架表**：`t_idempotency`、`t_outbox_event`、`flyway_schema_history`<br>**③ 系统表（无 tenant_id）**：`t_sys_menu`、`t_sys_package`（若有 tenant_id 则移出忽略表；`t_sys_tenant` 作为租户主表不参与行级过滤）<br>实现方式：维护一个 `Set<String>` 常量 `IGNORE_TABLES`，上述清单必须与阶段A 行 122 落地配置的列表**完全一致**，避免两处漂移 |
 | **事务** | `TenantContext` 在 Filter 中 set/clear，与事务无关；**禁止**在 `@Async` 线程里直接依赖 ThreadLocal（需要显式传递，`TraceTaskDecorator` 已提供范式，可复用） |
 | **日志异步** | `OperationLogAspect` 用 `@Async` + `AsyncConfig` 已有线程池；落库失败只 `log.warn`，**不得**影响主流程；参数落库前必须脱敏并截断到 2000 字符 |
 | **日志不入日志表** | `/api/v1/admin/logs/**` 自身**不记**操作日志（避免日志风暴），用切面内 URI 前缀排除 |
@@ -215,4 +231,4 @@ curl -s "http://localhost:8080/api/v1/admin/logs/login?pageNum=1&pageSize=5" -H 
 
 | 日期 | 会话范围 | 新增/修改文件 | 编译结果 | 遗留问题 |
 |---|---|---|---|---|
-| _待填_ | | | | |
+| 2026-10-22 | T02 阶段A：租户/套餐/部门/岗位/字典 + 多租户隔离（47 个：新增 45，修改 2） | 新增：`V5__system_tenant_org_dict.sql`；`SysTenant/SysPackage/SysDept/SysPost/SysDictType/SysDictItem` 实体与 6 个 Mapper；`TenantContext`、`TenantFilter`；`SysTenantService`、`SysOrgService`、`SysDictService` 及 impl；6 个 command、6 个 view；`AdminTenant/AdminDept/AdminPost/AdminDict` 4 个 Controller；5 个 DTO；`TenantContextTest`、`SysDictServiceImplTest`、`SysOrgServiceImplTest`。修改：`MybatisPlusConfig`（注册 `TenantLineInnerInterceptor` + 27 张忽略表常量）、`SysMenuServiceImpl`（按租户套餐 `menu_ids` 收敛菜单树） | `mvn -q -pl solo-eats-system -am compile`、`mvn -q -pl solo-eats-app -am compile` 均 0 error；`mvn -q -DskipTests package` BUILD SUCCESS；`mvn -pl solo-eats-system -am test` 17 个用例全通过。另起真实 MySQL 容器做运行验证：Flyway V1~V5 全量迁移通过、V5 可重复执行；登录、租户/套餐/部门/岗位/字典 CRUD、`X-Tenant-Id` 隔离、部门移动级联、字典缓存 TTL 3389s 与变更删除缓存均符合预期 | ① T01 的 `SysUserServiceImpl`/`AuthServiceImpl` 仍固定 tenant 1（不在本卡阶段A 文件清单），ADMIN 带 `X-Tenant-Id` 新增账号仍写入 tenant 1，租户账号登录需阶段B 统一改造；② 套餐仅收敛菜单树可见范围，未过滤权限码集合（`selectPermsByUserId` 未按 `menu_ids` 收敛）；③ 部门联系电话明文入库、仅展示脱敏，未接手机号加密；④ `t_sys_dept` 未加 `version`，移动/改名依赖事务内行锁而非乐观锁 |

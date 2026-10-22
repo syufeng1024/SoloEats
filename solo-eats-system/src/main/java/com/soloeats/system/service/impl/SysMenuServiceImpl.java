@@ -8,6 +8,8 @@ import com.soloeats.system.domain.entity.SysRoleMenu;
 import com.soloeats.system.mapper.SysMenuMapper;
 import com.soloeats.system.mapper.SysRoleMenuMapper;
 import com.soloeats.system.service.SysMenuService;
+import com.soloeats.system.service.SysTenantService;
+import com.soloeats.system.tenant.TenantContext;
 import com.soloeats.system.service.command.SaveMenuCommand;
 import com.soloeats.system.service.view.MenuNode;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +46,7 @@ public class SysMenuServiceImpl implements SysMenuService {
 
     private final SysMenuMapper sysMenuMapper;
     private final SysRoleMenuMapper sysRoleMenuMapper;
+    private final SysTenantService sysTenantService;
 
     @Override
     public List<MenuNode> tree(Integer menuType) {
@@ -54,9 +57,16 @@ public class SysMenuServiceImpl implements SysMenuService {
                     "menuType 只能是 1目录 或 2菜单，按钮不属于菜单树");
         }
 
+        // 菜单目录是平台级全局资产（tenant_id 固定 1），租户可见范围由套餐 menu_ids 收敛
+        Set<Long> allowedMenuIds = sysTenantService.allowedMenuIds(TenantContext.get());
+        if (allowedMenuIds != null && allowedMenuIds.isEmpty()) {
+            return List.of();
+        }
+
         LambdaQueryWrapper<SysMenu> wrapper = new LambdaQueryWrapper<SysMenu>()
                 .eq(SysMenu::getTenantId, DEFAULT_TENANT_ID)
                 .eq(SysMenu::getDeleted, 0)
+                .in(allowedMenuIds != null, SysMenu::getId, allowedMenuIds)
                 .in(onlyDirectoryOrMenu, SysMenu::getMenuType, TYPE_DIRECTORY, TYPE_MENU)
                 .eq(!onlyDirectoryOrMenu, SysMenu::getMenuType, menuType)
                 .orderByAsc(SysMenu::getSort)
