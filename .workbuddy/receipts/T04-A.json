@@ -1,0 +1,15 @@
+{
+  "card": "T04", "stage": "A", "status": "done",
+  "commit": "0a36c91", "commitMsg": "feat(T04): 门店管理与配送围栏",
+  "maven": { "result": "pass", "detail": "BUILD SUCCESS · 全量 package" },
+  "tests": "GeoUtilsTest 5 用例 0 失败",
+  "files": { "added": 42, "modified": 4, "deleted": 0 },
+  "migrations": ["V8__store.sql"],
+  "issues": [
+    "连锁/品牌管理本期裁剪（P1/P2），仅预留 t_shop.brand_id",
+    "配送围栏为多边形点集存储，未接路径规划与距离矩阵",
+    "营业时段未接节假日日历（P1）"
+  ],
+  "log": { "type": "feat", "title": "T04：门店管理 + 营业时间 + 配送围栏",
+    "detail": "新建 solo-eats-store 模块（5 实体 / 5 Mapper / 4 Service / GeoUtils）+ V8__store.sql；围栏用 GeoUtils 做点面判定" }
+}

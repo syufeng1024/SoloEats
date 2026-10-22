@@ -1,0 +1,24 @@
+{
+  "card": "T02",
+  "stage": "C",
+  "status": "done",
+  "commit": "704df2b",
+  "commitMsg": "feat(T02-C): DataScope 行级数据权限",
+  "maven": { "result": "pass", "detail": "BUILD SUCCESS · 9 模块 · mvn -q -DskipTests package" },
+  "tests": "46 passed（common 14 + system 32，含 DataScopeServiceTest 14）；OrderLifecycleIntegrationTest 7 passed",
+  "files": { "added": 6, "modified": 5, "deleted": 0 },
+  "migrations": [],
+  "issues": [
+    "商家/门店/订单/配送后台列表未标 @DataScope：merchant/store 模块尚未建（T03/T04），order/delivery 属 T02 禁止事项 #7；且 21 张历史表无 tenant_id，档位 2 需在 T03/T04/T05/T07 用 deptAlias/customSql 明确列映射",
+    "每次带 @DataScope 的查询额外查 1 次 t_sys_user + 2 次角色表，未做请求级缓存，高 QPS 报表需补缓存并处理角色变更失效",
+    "档位取所有启用角色中最宽松（数值最小），t_sys_user.data_scope 仅在无角色时兜底；若要求用户级可收紧角色需改语义",
+    "仅对角色码以 ADMIN 开头的平台身份生效，local/mock 登录未写 ADMIN* 角色时不会过滤",
+    "拦截器对 CTE 等非 PlainSelect/SetOperationList/ParenthesedSelect 语句抛 SYSTEM_ERROR（失败关闭），后续新语法需扩展",
+    "SysUserServiceImpl 仍手写 tenant_id=1 过滤（既有遗留，不在本次范围）"
+  ],
+  "log": {
+    "type": "feat",
+    "title": "T02 阶段C：DataScope 行级数据权限",
+    "detail": "common 新增 @DataScope + 拦截器（JSqlParser 改写 WHERE），system 新增 DataScopeService 五档解析；MybatisPlusConfig 按 TenantLine→DataScope→OptimisticLocker→Pagination 注册；SysUserMapper.selectScopedPage 首个落地"
+  }
+}
