@@ -74,7 +74,7 @@
 
 | 表 | 关键字段 | 索引 |
 |---|---|---|
-| `t_spec_group` | id, tenant_id, group_name（杯型/温度/糖度）, group_type tinyint(1单选 2多选), required tinyint, sort, is_template tinyint, created_at/updated_at/deleted | `idx_tenant(group_id)` |
+| `t_spec_group` | id, tenant_id, group_name（杯型/温度/糖度）, group_type tinyint(1单选 2多选), required tinyint, sort, is_template tinyint, created_at/updated_at/deleted | `idx_tenant_sort(tenant_id, sort)`、`idx_template(is_template, deleted)` |
 | `t_spec_option` | id, tenant_id, group_id, option_name, **price_delta bigint DEFAULT 0**, sort, status, created_at/updated_at/deleted | `idx_group(group_id, sort)` |
 | `t_spu_spec_rel` | id, tenant_id, spu_id, group_id, sort | `uk_spu_group(spu_id, group_id)` |
 | `t_addon_group` | id, tenant_id, group_name, min_select int, max_select int, sort, is_template tinyint, created_at/updated_at/deleted | — |
@@ -83,6 +83,8 @@
 | `t_sold_out_record` | id, tenant_id, shop_id, sku_id, spu_id, reason varchar(128), **sold_out_at**, **restored_at**, operator_id, operator_name, created_at | `idx_shop_time(shop_id, sold_out_at)`、`idx_sku(sku_id)` |
 | `t_product_review` | id, tenant_id, order_id, order_item_id, user_id, shop_id, spu_id, sku_id, rider_id, **overall_score tinyint(1~5)**, taste_score, package_score, delivery_score, content varchar(500), images_json json, tags_json json, anonymous tinyint, **status tinyint(0待审 1已通过 2已隐藏)**, **top_flag tinyint**, merchant_reply varchar(500), reply_at, append_content varchar(500), append_at, created_at/updated_at/deleted | `uk_order_item(order_item_id)`、`idx_shop_status(shop_id, status, created_at)`、`idx_spu(spu_id, status)`、`idx_user(user_id, created_at)`、`idx_rider(rider_id)` |
 | `t_review_tag` | id, tenant_id, tag_name, tag_type tinyint(1好评 2差评), sort, status, created_at | `idx_type_sort(tag_type, sort)` |
+| `t_media_group` | id, tenant_id, group_name varchar(64), parent_id bigint DEFAULT 0, sort, status, created_at/updated_at/deleted | `idx_parent_sort(parent_id, sort)` |
+| `t_media_item` | id, tenant_id, group_id, **file_id bigint**（引用 T03 `t_file`）, media_type tinyint(1图片 2视频), sort, status, created_at/updated_at/deleted | `idx_group_sort(group_id, sort)` |
 
 ---
 
@@ -113,6 +115,11 @@
 | 21 | POST | `/api/v1/merchant/reviews/{id}/reply` | `{reply}`（≤500 字，仅一次） | `MERCHANT` |
 | 22 | GET | `/api/v1/admin/reviews` | `shopId,spuId,riderId,status,scoreLevel,pageNum,pageSize` | `product:review:list` |
 | 23 | PUT | `/api/v1/admin/reviews/{id}/status` | `{status}` 通过/隐藏；`{topFlag}` 置顶 | `product:review:audit` |
+| 24 | GET | `/api/v1/admin/media-groups` | 素材库分组列表 | `product:media:list` |
+| 25 | POST/PUT/DELETE | `/api/v1/admin/media-groups`（+`/{id}`） | 素材分组维护（名称/排序）；图片文件复用 T03 `FileStoragePort` 上传，分组只存 `file_id` 引用 | `product:media:*` |
+| 26 | POST | `/api/v1/c/reviews/{id}/append` | `{content,images[]}` 追评（仅一次、原评价已通过、本人） | `C_USER` + `@Idempotent` |
+
+> 接口 24/25 补规格书 4.3:539「素材库：图片/视频素材分组管理」（P0 商品中心核心页 14.4 有「素材库」页面，后端不可缺）；接口 26 补追评提交入口（原卡有 `append_content/append_at` 字段与「追评仅一次」约束，但无提交接口）。
 
 **新增错误码**（4xxxx 段追加）：`40101 CATEGORY_NOT_FOUND`、`40102 CATEGORY_HAS_CHILDREN`、`40103 SPU_NOT_FOUND`、`40104 SHOP_SPU_EXISTS`、`40105 SPU_NOT_ON_SALE`、`40106 REVIEW_NOT_ALLOWED`（订单未完成/已评价/超期）、`40107 REVIEW_EXISTS`。
 
@@ -257,4 +264,4 @@ curl -s -X POST http://localhost:8080/api/v1/merchant/reviews/1/reply -H "Author
 
 | 日期 | 会话范围 | 新增/修改文件 | 编译结果 | 既有测试 | 遗留问题 |
 |---|---|---|---|---|---|
-| _待填_ | | | | | |
+| 2026-10-22 | T05 阶段A+B | 新增 115 / 修改 5。新增迁移 `V9__product_catalog.sql`、`V10__product_spec_addon_review.sql`；product：实体 14、Mapper 20、Service 接口 9、Impl 8、Command 12、View 13、Test 3；app：Controller 12、DTO 16、`ReviewOrderPortAdapter` 1；修改 `MerchantSkuServiceImpl`（同步估清记录）、`ErrorCode`（追加 40101~40107）、`solo-eats-product/pom.xml`（依赖 store 接口）、`application.yml`、`.env.example` | `mvn -q -pl solo-eats-product -am compile` 0 error；`mvn -q -pl solo-eats-app -am compile` 0 error；`mvn -q -DskipTests package` BUILD SUCCESS；V1~V10 在 MySQL 8.0.46 临时容器按序执行无报错（15 张新表、菜单/加料/门店商品 SQL 用种子数据验证通过） | 新增 `ShopMenuServiceImplTest` 2 例、`ProductReviewServiceImplTest` 6 例、`SoldOutServiceImplTest` 4 例；`MerchantSkuServiceImplTest`、`StockServiceImplTest`、`OrderStateMachineTest`、`RefundServiceImplTest` 全绿 | 1) 菜单分类暂以平台二级品类分组：`t_shop_category` 无 `spu_id` 关联列，门店自定义分类未参与菜单；2) 评价通过后 `t_shop.rating` 异步联动未落地（本卡禁止改 store 模块，留 T12/T17）；3) 重复上架按验收标准抛 40104，与接口表“返回已有记录”冲突，按验收执行；4) 逻辑删除行仍占用 `uk_tenant_name` / `uk_shop_spu`，删除后无法重建同名品类或同门店同 SPU；5) 评价立即重复提交由 `@Idempotent` 返回 40004，超窗口后由 `uk_order_item` 返回 40107，与验收“重复提交 code=0”不一致 |

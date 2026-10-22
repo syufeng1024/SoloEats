@@ -187,6 +187,13 @@ app:
     merchant-accept-timeout-minutes: ${ORDER_ACCEPT_TIMEOUT_MINUTES:10}
     after-sales-days: ${ORDER_AFTER_SALES_DAYS:7}
     auto-complete-hours: ${ORDER_AUTO_COMPLETE_HOURS:24}
+  product:
+    # 门店改价审核开关；P0 默认免审，上架/改价后 audit_status 直接写 2
+    price-audit-enabled: ${PRODUCT_PRICE_AUDIT_ENABLED:false}
+    # 商品图允许的外部域名前缀（逗号分隔）；t_file 代理地址 /api/v1/files/ 始终允许
+    image-host-allowlist: ${PRODUCT_IMAGE_HOST_ALLOWLIST:}
+    # 用户端菜单缓存 TTL（秒）
+    menu-cache-seconds: ${PRODUCT_MENU_CACHE_SECONDS:300}
   payment:
     callback-secret: ${PAYMENT_CALLBACK_SECRET:change_me_payment_callback_secret}
   pickup:

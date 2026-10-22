@@ -40,6 +40,15 @@ public enum ErrorCode {
     COUPON_NOT_AVAILABLE(40008, "优惠券不可用", HttpStatus.CONFLICT),
     COUPON_STATE_INVALID(40009, "优惠券状态不一致", HttpStatus.CONFLICT),
 
+    // T05 商品中心（401xx 段）
+    CATEGORY_NOT_FOUND(40101, "品类不存在", HttpStatus.NOT_FOUND),
+    CATEGORY_HAS_CHILDREN(40102, "品类下存在子品类或商品，不能删除", HttpStatus.CONFLICT),
+    SPU_NOT_FOUND(40103, "商品库商品不存在", HttpStatus.NOT_FOUND),
+    SHOP_SPU_EXISTS(40104, "该商品已上架到门店", HttpStatus.CONFLICT),
+    SPU_NOT_ON_SALE(40105, "商品未上架", HttpStatus.CONFLICT),
+    REVIEW_NOT_ALLOWED(40106, "当前订单不满足评价条件", HttpStatus.CONFLICT),
+    REVIEW_EXISTS(40107, "该商品已评价", HttpStatus.CONFLICT),
+
     DISPATCH_TAKEN(50001, "配送单已被抢", HttpStatus.CONFLICT),
     PICKUP_CODE_INVALID(50002, "取餐码错误或已使用", HttpStatus.CONFLICT),
     DELIVERY_NOT_FOUND(50003, "配送单不存在", HttpStatus.NOT_FOUND),

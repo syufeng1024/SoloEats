@@ -5,22 +5,28 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.soloeats.common.api.PageResult;
+import com.soloeats.common.auth.AuthContext;
+import com.soloeats.common.auth.UserPrincipal;
 import com.soloeats.common.exception.BizException;
 import com.soloeats.common.exception.ErrorCode;
 import com.soloeats.product.domain.entity.Sku;
 import com.soloeats.product.domain.entity.SkuStock;
+import com.soloeats.product.domain.entity.SoldOutRecord;
 import com.soloeats.product.mapper.SkuMapper;
 import com.soloeats.product.mapper.SkuStockMapper;
+import com.soloeats.product.mapper.SoldOutRecordMapper;
 import com.soloeats.product.service.MerchantSkuService;
 import com.soloeats.product.service.command.CreateSkuCommand;
 import com.soloeats.product.service.command.UpdateSkuCommand;
 import com.soloeats.product.service.command.UpdateSkuStockCommand;
 import com.soloeats.product.service.view.MerchantSkuView;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -38,6 +44,13 @@ public class MerchantSkuServiceImpl implements MerchantSkuService {
     private final SkuMapper skuMapper;
     private final SkuStockMapper skuStockMapper;
     private final ObjectMapper objectMapper;
+
+    /**
+     * 估清记录同步。用字段注入而非构造器，保持既有
+     * MerchantSkuServiceImplTest 的三参构造与断言不变；单元测试下为空即跳过。
+     */
+    @Autowired(required = false)
+    private SoldOutRecordMapper soldOutRecordMapper;
 
     @Override
     public PageResult<MerchantSkuView> page(Long shopId, Integer status, String keyword,
@@ -162,11 +175,21 @@ public class MerchantSkuServiceImpl implements MerchantSkuService {
             stock.setSoldOut(command.soldOut() != null && command.soldOut());
             stock.setVersion(0);
             skuStockMapper.insert(stock);
+            if (Boolean.TRUE.equals(stock.getSoldOut())) {
+                recordSoldOut(shopId, sku);
+            }
             return toView(sku, stock);
         }
 
+        boolean wasSoldOut = Boolean.TRUE.equals(stock.getSoldOut());
         skuStockMapper.updateManualStock(shopId, skuId,
                 command.availableQty(), command.soldOut());
+        if (command.soldOut() != null && command.soldOut() && !wasSoldOut) {
+            recordSoldOut(shopId, sku);
+        } else if (command.soldOut() != null && !command.soldOut() && wasSoldOut
+                && soldOutRecordMapper != null) {
+            soldOutRecordMapper.markRestored(shopId, skuId);
+        }
         Sku savedSku = skuMapper.selectById(skuId);
         return toView(savedSku == null ? sku : savedSku, findStock(shopId, skuId));
     }
@@ -202,6 +225,28 @@ public class MerchantSkuServiceImpl implements MerchantSkuService {
                 .eq(SkuStock::getShopId, shopId)
                 .eq(SkuStock::getSkuId, skuId)
                 .last("LIMIT 1"));
+    }
+
+    /**
+     * 商家在 /merchant/skus/{skuId}/stock 直接置估清时补一条估清记录。
+     * 记录与库存更新同属 updateStock 事务，任一失败整体回滚；返回值与校验语义不变。
+     */
+    private void recordSoldOut(Long shopId, Sku sku) {
+        if (soldOutRecordMapper == null) {
+            return;
+        }
+        SoldOutRecord record = new SoldOutRecord();
+        record.setShopId(shopId);
+        record.setSkuId(sku.getId());
+        record.setSpuId(sku.getSpuId());
+        record.setReason("商家库存设置估清");
+        record.setSoldOutAt(LocalDateTime.now());
+        UserPrincipal principal = AuthContext.current();
+        if (principal != null) {
+            record.setOperatorId(principal.userId());
+            record.setOperatorName(principal.username());
+        }
+        soldOutRecordMapper.insert(record);
     }
 
     private MerchantSkuView toView(Sku sku, SkuStock stock) {
