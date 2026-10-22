@@ -6,9 +6,12 @@ import com.baomidou.mybatisplus.extension.plugins.handler.TenantLineHandler;
 import com.baomidou.mybatisplus.extension.plugins.inner.OptimisticLockerInnerInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.TenantLineInnerInterceptor;
+import com.soloeats.common.datascope.DataScopeInnerInterceptor;
+import com.soloeats.system.service.DataScopeService;
 import com.soloeats.system.tenant.TenantContext;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.LongValue;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -60,8 +63,12 @@ public class MybatisPlusConfig {
             "t_sys_package",
             "t_sys_tenant");
 
+    /**
+     * DataScopeService 依赖 Mapper，Mapper 又依赖本方法创建的拦截器。用 {@link ObjectProvider}
+     * 延迟到第一次查询时再取实例，避免启动期循环依赖。
+     */
     @Bean
-    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+    public MybatisPlusInterceptor mybatisPlusInterceptor(ObjectProvider<DataScopeService> dataScopeService) {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
         // 租户隔离必须先于分页插件：先改写 WHERE，再拼 LIMIT
         interceptor.addInnerInterceptor(new TenantLineInnerInterceptor(new TenantLineHandler() {
@@ -81,6 +88,9 @@ public class MybatisPlusConfig {
                         || IGNORE_TABLES.contains(tableName.toLowerCase(Locale.ROOT));
             }
         }));
+        // 行级数据权限：必须在 TenantLine 之后（先补 tenant_id）、分页插件之前（再拼 LIMIT）
+        interceptor.addInnerInterceptor(new DataScopeInnerInterceptor(
+                (principal, dataScope) -> dataScopeService.getObject().buildCondition(principal, dataScope)));
         interceptor.addInnerInterceptor(new OptimisticLockerInnerInterceptor());
         interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
         return interceptor;

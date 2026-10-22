@@ -86,7 +86,8 @@ public class SysUserServiceImpl implements SysUserService {
         }
         wrapper.orderByDesc(SysUser::getId);
 
-        Page<SysUser> page = sysUserMapper.selectPage(
+        // DataScopeInnerInterceptor 按当前平台角色的 data_scope 追加行级条件
+        Page<SysUser> page = sysUserMapper.selectScopedPage(
                 new Page<>(normalizedPageNum, normalizedPageSize), wrapper);
         List<SysUserView> views = page.getRecords().stream().map(this::toView).toList();
         return PageResult.of(views, page.getTotal(), normalizedPageNum, normalizedPageSize);
