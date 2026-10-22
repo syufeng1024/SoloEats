@@ -47,7 +47,15 @@ public enum ErrorCode {
     DELIVERY_RIDER_MISMATCH(50005, "骑手与配送单不匹配", HttpStatus.CONFLICT),
 
     SETTLEMENT_NOT_FOUND(60001, "结算单不存在", HttpStatus.NOT_FOUND),
-    SETTLEMENT_STATE_INVALID(60002, "结算状态不一致", HttpStatus.CONFLICT);
+    SETTLEMENT_STATE_INVALID(60002, "结算状态不一致", HttpStatus.CONFLICT),
+
+    MERCHANT_NOT_FOUND(70001, "商家不存在", HttpStatus.NOT_FOUND),
+    MERCHANT_STATUS_INVALID(70002, "商家状态不允许当前操作", HttpStatus.CONFLICT),
+    MERCHANT_QUALIFICATION_MISSING(70003, "入驻资质不齐全", HttpStatus.BAD_REQUEST),
+    // 公共文件服务，建议后续迁移 1xxxx；后续新增文件类错误码一律用 1xxxx
+    FILE_UPLOAD_FAILED(70004, "文件上传失败", HttpStatus.INTERNAL_SERVER_ERROR),
+    FILE_TYPE_NOT_ALLOWED(70005, "文件类型不支持", HttpStatus.BAD_REQUEST),
+    MERCHANT_APPLY_FORBIDDEN(70006, "入驻申请凭证无效或已过期", HttpStatus.FORBIDDEN);
 
     private final int code;
     private final String message;

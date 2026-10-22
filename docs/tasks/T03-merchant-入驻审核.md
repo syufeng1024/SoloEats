@@ -64,8 +64,8 @@
 
 | # | 方法 | 路径 | 请求/响应要点 | 权限 |
 |---|---|---|---|---|
-| 1 | POST | `/api/v1/files` | `multipart/form-data: file, bizType` → `{fileId,url,fileKey,sizeBytes}`；校验 MIME 白名单 `image/jpeg,png,webp,pdf`，≤10MB | 登录即可 |
-| 2 | POST | `/api/v1/files/presign` | `{fileName,contentType,bizType}` → `{uploadUrl,fileKey,expiresIn}`（MinIO 预签名 PUT） | 登录即可 |
+| 1 | POST | `/api/v1/files` | `multipart/form-data: file, bizType` → `{fileId,url,fileKey,sizeBytes}`；校验 MIME 白名单 `image/jpeg,png,webp,pdf`，≤10MB | 登录即可；**申请阶段（凭 `applyToken`）亦放行**（见下方「关键实现约束 → 文件上传鉴权」） |
+| 2 | POST | `/api/v1/files/presign` | `{fileName,contentType,bizType}` → `{uploadUrl,fileKey,expiresIn}`（MinIO 预签名 PUT） | 登录即可；**申请阶段（凭 `applyToken`）亦放行** |
 | 3 | DELETE | `/api/v1/files/{fileId}` | 逻辑删除 + 异步删对象 | 本人或 ADMIN |
 | 4 | POST | `/api/v1/merchant/apply` | 免登录；`{merchantName,brandName,contactName,contactPhone,smsCode,categoryId}` → `{applyId,applyNo}` | 白名单 + 限流 5/分/IP |
 | 5 | PUT | `/api/v1/merchant/apply/{applyId}` | 补充资料（`businessLicenseNo,legalPerson,legalIdCard,province,city,district,address`） | 凭 `applyToken`（申请时返回） |
@@ -85,6 +85,8 @@
 | 19 | PUT | `/api/v1/admin/merchant-accounts/{id}/audit` | `{status}` 结算账户审核 | `merchant:audit` |
 
 **新增错误码**（`ErrorCode` 追加，7xxxx 段）：`70001 MERCHANT_NOT_FOUND`、`70002 MERCHANT_STATUS_INVALID`、`70003 MERCHANT_QUALIFICATION_MISSING`、`70004 FILE_UPLOAD_FAILED`、`70005 FILE_TYPE_NOT_ALLOWED`、`70006 MERCHANT_APPLY_FORBIDDEN`。
+
+> 说明：`70004`/`70005` 是**文件服务公共错误码**（T03/T05/T09/T10/T13 共用），按 README 分段本应归 1xxxx 系统段；为降低对已引用的改动面，本卡沿用 7xxxx 码值，并在 `ErrorCode` 中标注 `// 公共文件服务，建议后续迁移 1xxxx` 注释。**后续新增文件类错误码一律用 1xxxx**。
 
 ---
 
@@ -137,6 +139,7 @@
 | **公开访问** | bucket 保持私有；返回的 `url` 是**后端代理地址** `GET /api/v1/files/{fileId}/raw`（走鉴权或短期签名），避免 MinIO 端口暴露。P0 可简化为 bucket 设为 `download` 策略，但**必须在任务卡执行记录里写明取舍** |
 | **敏感字段** | `legal_id_card`、`bank_account_no` 用 AES-GCM 加密（`app.crypto.pii-key` 环境变量）；接口返回脱敏（身份证 `110***********1234`、卡号 `**** **** **** 1234`） |
 | **入驻申请鉴权** | 入驻发生在"还没有账号"之前，用 `applyToken`（一次性 JWT，claim `applyId`，有效期 24h，签发时返回）而非用户 token；**不得**开放无鉴权的 `PUT /apply/{id}` |
+| **文件上传鉴权** | `/api/v1/files`、`/files/presign` 默认「登录即可」，但**申请阶段没有用户账号**。因此这两个接口必须**额外接受 `applyToken`**（请求头 `Authorization: Bearer <applyToken>` 或 `X-Apply-Token`）：当令牌 `aud/type=apply` 且 `applyId` 有效时放行，`t_file.biz_id` 绑定到 `applyId`、`biz_type=MERCHANT_QUAL`、`uploader_type=APPLY`；否则走用户 token 鉴权。**未实现此放行前，接口 6「凭 applyToken 传 fileId」的资质上传链路走不通** |
 | **手机号验证码** | P0 复用 T06 的 `smsCode` 机制；若 T06 尚未完成，本卡先允许 `smsCode = "000000"`（`app.auth.mock-sms-enabled=true`）并在代码标 `TODO(T06)` |
 | **幂等** | `POST /merchant/apply`、`POST /admin/merchants/{id}/approve` 必须加 `@Idempotent`；`approve` 二次调用返回已有结果而非 500 |
 | **抽佣率边界** | `0.0000 ≤ commission_rate ≤ 0.5000`，入库前 `setScale(4, RoundingMode.HALF_UP)`；默认取 `app.settlement.default-commission-rate` |
@@ -207,4 +210,16 @@ curl -s -X POST http://localhost:8080/api/v1/admin/merchants/999/approve -H "Aut
 
 | 日期 | 会话范围 | 新增/修改文件 | 编译结果 | 遗留问题 |
 |---|---|---|---|---|
-| _待填_ | | | | |
+| 2026-10-22 | T03 阶段A+B | 修改 6：`pom.xml`、`solo-eats-common/pom.xml`、`solo-eats-app/pom.xml`、`ErrorCode.java`、`application.yml`、`.env.example`；新增 59：`solo-eats-merchant` 全模块（pom、5 实体、3 枚举、5 Mapper、5 Service 接口 + 5 实现、6 Command、9 View、4 support、2 测试，共 45）、`V7__merchant.sql`、common `file/` 4 类、app `MinioConfig` + 4 Controller + 4 DTO | `mvn -q -pl solo-eats-merchant -am compile` 0 error；`mvn -q -pl solo-eats-app -am compile` 0 error；`mvn -q -DskipTests package` BUILD SUCCESS；`MerchantStatusTest` 3 + `MerchantAdminServiceImplTest` 4 全部通过 | 见下方「实现取舍与遗留」 |
+
+### 实现取舍与遗留
+
+1. **商家登录租户**：现有 `SysUserService.create()` / `AuthServiceImpl` 固定 `tenant_id=1`，因此管理员账号与 `t_merchant.tenant_id` 均回填为账号实际登录租户 `1`；`t_sys_tenant(tenant_type=2)` 行已按审核事务创建并绑定 `merchant_id`，但暂不作为登录租户，待 T02 租户登录改造后统一切换。若直接回填新租户 ID，商家登录后会被 `TenantLineInnerInterceptor` 过滤掉自己的商家行。
+2. **`MERCHANT_MANAGER` 角色**：按 `role_code` 通过 `SysRoleService.page` 查询，未硬编码角色 ID；商家自助接口同时接受 `MERCHANT`（mock token）与 `MERCHANT_MANAGER`（真实账号）。既有 `MerchantSkuController` / `MerchantOrderController` 仍只声明 `MERCHANT`，真实商家账号访问会 403，属 T04/T05 需统一处理的既有问题。
+3. **文件访问**：bucket 保持私有；`t_file.url` 只存后端代理地址 `/api/v1/files/{id}/raw`。`POST /files`、`/files/presign` 接受用户 token 或 `X-Apply-Token`（兼容 `Authorization: Bearer <applyToken>`）；申请阶段 `biz_id=applyId`、`uploader_type=APPLY`，资质绑定会校验文件归属。`GET /files/{id}/raw` 额外接受 `?token=`，便于 `<img>` 直接加载；未引入短期签名 URL。
+4. **预签名**：只返回 `uploadUrl/fileKey/expiresIn`，不落 `t_file`（接口未定义 fileId）；直传模块需在后续调用中补登记。MinIO 侧不在预签名阶段强制 `Content-Type`，仅后端白名单 + 后缀校验。
+5. **幂等**：`POST /merchant/apply` 60s 防重；`approve` 5s 并发防重，窗口外重复调用由 service 的「已通过直接返回详情」兜底，不会重复建账号/租户。公共 `IdempotentAspect` 不支持响应回放，窗口内重复请求返回 `40004`。
+6. **敏感字段**：`legal_id_card`、`bank_account_no` 使用 AES-GCM（`PII_KEY`）加密，返回脱敏；`PII_KEY` 未配置时拒绝加解密（不会明文落库）。`contact_phone` 按本卡约定以业务联系方式明文存储并建索引。
+7. **MinIO 启动**：`MinioConfig` 初始化 bucket 失败只告警，不阻断应用启动；上传失败返回 `70004`。
+8. **通知**：`MerchantNotifyPort` 空实现 + `TODO(T08)`；接入站内信后应改为事务提交后异步发送。
+9. **依赖**：MinIO 8.6.0 的 okhttp 5.1.0 在 Maven 下是 KMP 元数据包，补充了 `okhttp-jvm` 并将 `kotlin.version` 提升至 2.2.0（`okio-jvm 3.15.0` / `okhttp-jvm 5.1.0` 的运行时要求）。

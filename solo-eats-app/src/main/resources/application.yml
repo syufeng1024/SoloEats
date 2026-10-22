@@ -158,12 +158,16 @@ app:
   auth:
     # 旧契约 role → principal 模拟登录开关；生产必须关闭
     mock-login-enabled: ${AUTH_MOCK_LOGIN_ENABLED:true}
+    # T06 短信通道落地前的入驻验证码开关：true 时只接受 000000
+    mock-sms-enabled: ${AUTH_MOCK_SMS_ENABLED:true}
   tenant:
     # 多租户隔离总开关（TenantLineInnerInterceptor 已注册，关闭时由运维置 false 并重启）
     enabled: ${TENANT_ENABLED:true}
   crypto:
     # SMTP 密码 AES-GCM 密钥；未配置时拒绝写入/读取邮件密码
     mail-key: ${MAIL_KEY:}
+    # 商家 PII（法人身份证、银行卡号）AES-GCM 密钥；未配置时拒绝加解密
+    pii-key: ${PII_KEY:}
   rate-limit:
     order-create:
       limit: ${RATE_LIMIT_ORDER_CREATE:20}
