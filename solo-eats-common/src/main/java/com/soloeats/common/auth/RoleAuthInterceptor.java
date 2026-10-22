@@ -41,12 +41,29 @@ public class RoleAuthInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        boolean allowed = Arrays.stream(requireRole.value()).anyMatch(principal::hasRole);
+        boolean allowed = Arrays.stream(requireRole.value())
+                .anyMatch(required -> matches(principal, required));
         if (!allowed) {
             write(response, HttpServletResponse.SC_FORBIDDEN, ErrorCode.AUTH_FORBIDDEN);
             return false;
         }
         return true;
+    }
+
+    /**
+     * 平台后台细分为 8 个角色（ADMIN、ADMIN_OPERATION、ADMIN_PRODUCT …，规格书 3.1），
+     * 类级 {@code @RequireRole(Roles.ADMIN)} 不应把其余 7 个平台角色挡在门外。
+     * 权限码仍由 PermissionInterceptor 精确校验，这里只放宽角色粗筛。
+     */
+    private boolean matches(UserPrincipal principal, String required) {
+        if (principal.hasRole(required)) {
+            return true;
+        }
+        if (!Roles.ADMIN.equals(required) || principal.roles() == null) {
+            return false;
+        }
+        return principal.roles().stream()
+                .anyMatch(role -> role != null && role.startsWith(Roles.ADMIN));
     }
 
     private void write(HttpServletResponse response, int status, ErrorCode errorCode) throws IOException {

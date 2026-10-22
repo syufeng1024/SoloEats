@@ -6,6 +6,7 @@ import com.soloeats.common.api.PageResult;
 import com.soloeats.common.auth.RequirePermission;
 import com.soloeats.common.auth.RequireRole;
 import com.soloeats.common.auth.Roles;
+import com.soloeats.common.log.OperationLog;
 import com.soloeats.system.service.SysRoleService;
 import com.soloeats.system.service.command.SaveRoleCommand;
 import com.soloeats.system.service.view.SysRoleView;
@@ -41,12 +42,14 @@ public class AdminRoleController {
     }
 
     @RequirePermission("system:role:create")
+    @OperationLog(module = "角色管理", action = "新增")
     @PostMapping
     public ApiResponse<SysRoleView> create(@Valid @RequestBody SaveRoleRequest request) {
         return ApiResponse.ok(sysRoleService.create(toCommand(request)));
     }
 
     @RequirePermission("system:role:update")
+    @OperationLog(module = "角色管理", action = "修改")
     @PutMapping("/{id}")
     public ApiResponse<SysRoleView> update(
             @PathVariable Long id,
@@ -61,6 +64,7 @@ public class AdminRoleController {
     }
 
     @RequirePermission("system:role:assign")
+    @OperationLog(module = "角色管理", action = "分配菜单")
     @PutMapping("/{id}/menus")
     public ApiResponse<Void> assignMenus(
             @PathVariable Long id,

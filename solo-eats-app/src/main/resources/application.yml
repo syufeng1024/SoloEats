@@ -84,6 +84,23 @@ spring:
     validate-on-migrate: true
     table: flyway_schema_history
 
+  # SMTP 全部走环境变量；默认值为空，禁止把真实账号密码写进配置文件
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          connectiontimeout: ${MAIL_SMTP_CONNECTION_TIMEOUT:5000}
+          timeout: ${MAIL_SMTP_TIMEOUT:5000}
+          writetimeout: ${MAIL_SMTP_WRITE_TIMEOUT:5000}
+          ssl:
+            enable: ${MAIL_SMTP_SSL:true}
+
   jackson:
     time-zone: Asia/Shanghai
     date-format: yyyy-MM-dd HH:mm:ss
@@ -138,6 +155,15 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-}] %logger{40} - %msg%n"
 
 app:
+  auth:
+    # 旧契约 role → principal 模拟登录开关；生产必须关闭
+    mock-login-enabled: ${AUTH_MOCK_LOGIN_ENABLED:true}
+  tenant:
+    # 多租户隔离总开关（TenantLineInnerInterceptor 已注册，关闭时由运维置 false 并重启）
+    enabled: ${TENANT_ENABLED:true}
+  crypto:
+    # SMTP 密码 AES-GCM 密钥；未配置时拒绝写入/读取邮件密码
+    mail-key: ${MAIL_KEY:}
   rate-limit:
     order-create:
       limit: ${RATE_LIMIT_ORDER_CREATE:20}

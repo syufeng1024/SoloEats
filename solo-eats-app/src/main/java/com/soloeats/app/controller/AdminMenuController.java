@@ -5,6 +5,7 @@ import com.soloeats.common.api.ApiResponse;
 import com.soloeats.common.auth.RequirePermission;
 import com.soloeats.common.auth.RequireRole;
 import com.soloeats.common.auth.Roles;
+import com.soloeats.common.log.OperationLog;
 import com.soloeats.system.service.SysMenuService;
 import com.soloeats.system.service.command.SaveMenuCommand;
 import com.soloeats.system.service.view.MenuNode;
@@ -37,12 +38,14 @@ public class AdminMenuController {
     }
 
     @RequirePermission("system:menu:create")
+    @OperationLog(module = "菜单管理", action = "新增")
     @PostMapping
     public ApiResponse<MenuNode> create(@Valid @RequestBody SaveMenuRequest request) {
         return ApiResponse.ok(sysMenuService.create(toCommand(request)));
     }
 
     @RequirePermission("system:menu:update")
+    @OperationLog(module = "菜单管理", action = "修改")
     @PutMapping("/{id}")
     public ApiResponse<MenuNode> update(
             @PathVariable Long id,
@@ -51,6 +54,7 @@ public class AdminMenuController {
     }
 
     @RequirePermission("system:menu:delete")
+    @OperationLog(module = "菜单管理", action = "删除")
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         sysMenuService.delete(id);

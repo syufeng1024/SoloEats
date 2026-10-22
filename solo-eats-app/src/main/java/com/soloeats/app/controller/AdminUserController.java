@@ -7,6 +7,7 @@ import com.soloeats.common.auth.RequirePermission;
 import com.soloeats.common.auth.RequireRole;
 import com.soloeats.common.auth.Roles;
 import com.soloeats.common.idempotency.Idempotent;
+import com.soloeats.common.log.OperationLog;
 import com.soloeats.system.service.SysUserService;
 import com.soloeats.system.service.command.CreateUserCommand;
 import com.soloeats.system.service.command.UpdateUserCommand;
@@ -51,6 +52,7 @@ public class AdminUserController {
      */
     @RequirePermission("system:user:create")
     @Idempotent(ttlSeconds = 60)
+    @OperationLog(module = "用户管理", action = "新增")
     @PostMapping
     public ApiResponse<SysUserView> create(@Valid @RequestBody SaveUserRequest request) {
         CreateUserCommand command = new CreateUserCommand(
@@ -70,6 +72,7 @@ public class AdminUserController {
     }
 
     @RequirePermission("system:user:update")
+    @OperationLog(module = "用户管理", action = "修改")
     @PutMapping("/{id}")
     public ApiResponse<SysUserView> update(
             @PathVariable Long id,
@@ -89,6 +92,7 @@ public class AdminUserController {
     }
 
     @RequirePermission("system:user:update")
+    @OperationLog(module = "用户管理", action = "启用停用")
     @PutMapping("/{id}/status")
     public ApiResponse<Void> updateStatus(
             @PathVariable Long id,
@@ -98,6 +102,7 @@ public class AdminUserController {
     }
 
     @RequirePermission("system:user:assign")
+    @OperationLog(module = "用户管理", action = "分配角色")
     @PutMapping("/{id}/roles")
     public ApiResponse<Void> assignRoles(
             @PathVariable Long id,
@@ -107,6 +112,7 @@ public class AdminUserController {
     }
 
     @RequirePermission("system:user:reset")
+    @OperationLog(module = "用户管理", action = "重置密码", recordParams = false)
     @PostMapping("/{id}/reset-password")
     public ApiResponse<Void> resetPassword(
             @PathVariable Long id,
@@ -116,6 +122,7 @@ public class AdminUserController {
     }
 
     @RequirePermission("system:user:delete")
+    @OperationLog(module = "用户管理", action = "删除")
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         sysUserService.delete(id);
