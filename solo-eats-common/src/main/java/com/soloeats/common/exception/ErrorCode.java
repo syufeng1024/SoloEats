@@ -70,7 +70,16 @@ public enum ErrorCode {
     SHOP_CLOSED(70102, "门店未营业或已打烊", HttpStatus.CONFLICT),
     SHOP_OUT_OF_RANGE(70103, "超出配送范围", HttpStatus.BAD_REQUEST),
     SHOP_BELOW_MIN_ORDER(70104, "未达起送价", HttpStatus.BAD_REQUEST),
-    SHOP_PICKUP_DISABLED(70105, "门店未开通到店自取", HttpStatus.BAD_REQUEST);
+    SHOP_PICKUP_DISABLED(70105, "门店未开通到店自取", HttpStatus.BAD_REQUEST),
+
+    // T06 C 端用户 / 钱包（8xxxx 段）
+    MEMBER_NOT_FOUND(80001, "用户不存在", HttpStatus.NOT_FOUND),
+    MEMBER_DISABLED(80002, "账号已被禁用", HttpStatus.FORBIDDEN),
+    SMS_CODE_INVALID(80003, "验证码错误或已失效", HttpStatus.BAD_REQUEST),
+    SMS_CODE_EXPIRED(80004, "验证码已过期", HttpStatus.BAD_REQUEST),
+    ADDRESS_LIMIT_EXCEEDED(80005, "收货地址数量已达上限", HttpStatus.CONFLICT),
+    WALLET_BALANCE_NOT_ENOUGH(80006, "钱包余额不足", HttpStatus.CONFLICT),
+    WALLET_AMOUNT_INVALID(80007, "钱包金额不合法", HttpStatus.BAD_REQUEST);
 
     private final int code;
     private final String message;

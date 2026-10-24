@@ -160,6 +160,11 @@ app:
     mock-login-enabled: ${AUTH_MOCK_LOGIN_ENABLED:true}
     # T06 短信通道落地前的入驻验证码开关：true 时只接受 000000
     mock-sms-enabled: ${AUTH_MOCK_SMS_ENABLED:true}
+  security:
+    # C 端手机号 AES-GCM 密钥与 SHA-256 加盐：默认值仅供 local/dev 本地开发，
+    # 生产必须由环境变量 PHONE_AES_KEY / PHONE_HASH_SALT 注入（见 .env.example）
+    phone-aes-key: ${PHONE_AES_KEY:change_me_phone_aes_key_32bytes}
+    phone-hash-salt: ${PHONE_HASH_SALT:change_me_phone_hash_salt}
   tenant:
     # 多租户隔离总开关（TenantLineInnerInterceptor 已注册，关闭时由运维置 false 并重启）
     enabled: ${TENANT_ENABLED:true}
