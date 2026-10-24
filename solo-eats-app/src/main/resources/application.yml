@@ -209,6 +209,9 @@ app:
   settlement:
     bill-cron: "${SETTLEMENT_BILL_CRON:0 0 2 * * ?}"
     default-commission-rate: ${DEFAULT_COMMISSION_RATE:0.0600}
+  wallet:
+    # C 端模拟充值开关；仅 local/dev 允许为 true，生产必须设 WALLET_MOCK_RECHARGE_ENABLED=false
+    mock-recharge-enabled: ${WALLET_MOCK_RECHARGE_ENABLED:true}
   idempotency:
     ttl-hours: ${IDEMPOTENCY_TTL_HOURS:24}
   minio:

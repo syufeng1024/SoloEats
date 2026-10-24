@@ -62,12 +62,17 @@ public class MemberAddressServiceImpl implements MemberAddressService {
         entity.setDeleted(0);
         applyFields(entity, cmd);
 
-        try {
-            memberAddressMapper.insert(entity);
-        } catch (DuplicateKeyException ex) {
-            // uk_user_phone_addr(user_id, receiver_phone_mask, address) 兜底重复地址
+        // V12 移除了 uk_user_phone_addr（不含 deleted，逻辑删除后无法复用同一地址），
+        // 改为应用层只比对未删除记录；@TableLogic 会自动追加 deleted = 0。
+        long duplicated = memberAddressMapper.selectCount(new LambdaQueryWrapper<MemberAddress>()
+                .eq(MemberAddress::getUserId, userId)
+                .eq(MemberAddress::getReceiverPhoneMask, entity.getReceiverPhoneMask())
+                .eq(MemberAddress::getAddress, entity.getAddress()));
+        if (duplicated > 0L) {
             throw new BizException(ErrorCode.PARAM_INVALID, "该收货地址已存在");
         }
+
+        memberAddressMapper.insert(entity);
 
         log.info("member address created userId={} addressId={} isDefault={}",
                 userId, entity.getId(), makeDefault);
