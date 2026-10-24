@@ -35,4 +35,11 @@ public interface DeliveryService {
      * 骑手送达：配送单 40 -> 50，并写入骑手收入明细（结算前置）。
      */
     DeliveryOrder deliver(Long orderId, Long riderId);
+
+    /**
+     * 骑手拒单：dispatch_count + 1。
+     * releaseToHall=true 时清空骑手、派单过期时间并把配送单退回待派单（10 -> 0）；
+     * 仅当配送单仍处于已派单（10）且 rider_id 为空或等于该骑手时生效。
+     */
+    DeliveryOrder reject(Long orderId, Long riderId, boolean releaseToHall);
 }

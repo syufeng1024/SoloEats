@@ -19,6 +19,11 @@
             <groupId>com.soloeats</groupId>
             <artifactId>solo-eats-common</artifactId>
         </dependency>
+        <!-- 抢单大厅距离计算复用 store 模块的 GeoUtils（Haversine），不引第三方地图 SDK -->
+        <dependency>
+            <groupId>com.soloeats</groupId>
+            <artifactId>solo-eats-store</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>

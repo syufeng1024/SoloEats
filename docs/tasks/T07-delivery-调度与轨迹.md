@@ -257,4 +257,4 @@ curl -s -X POST http://localhost:8080/api/v1/admin/deliveries/$DID/reassign -H "
 
 | 日期 | 会话范围 | 新增/修改文件 | 编译结果 | 既有测试 | 遗留问题 |
 |---|---|---|---|---|---|
-| _待填_ | | | | | |
+| 2026-10-24 | T07 阶段A（骑手档案/认证、上下线、听单/抢单、派单策略） | 新增 52 / 修改 7 | `mvn -q -pl solo-eats-delivery -am compile` 通过；`mvn -q -DskipTests package` BUILD SUCCESS；V14 经 Testcontainers MySQL 的 Flyway 全量迁移验证通过 | `mvn -pl solo-eats-delivery -am test`：23 个测试全绿（DeliveryServiceImplTest 14 + DispatchStrategyTest 4 + RiderServiceImplTest 5）；OrderLifecycleIntegrationTest 7 个全绿 | 迁移号改为 **V14**（V12/V13 已被 T06 占用），菜单权限 id 92~97；`t_delivery_order` 只增列 `promise_deliver_at`，接单回填与超时扫描留阶段B；拒单的 10→0 释放动作新增在 `DeliveryServiceImpl.reject`，RiderDispatchService 无配送单状态 SQL；Redis `load` 仅上线时按进行中单量初始化，接单/送达后的增减留阶段B；阶段B 轨迹、运费、取货/送达、收入概览未做 |

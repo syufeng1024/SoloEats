@@ -167,6 +167,30 @@ public class DeliveryServiceImpl implements DeliveryService {
         return delivered;
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DeliveryOrder reject(Long orderId, Long riderId, boolean releaseToHall) {
+        DeliveryOrder existing = requireDelivery(orderId);
+        if (!Objects.equals(existing.getStatus(), DeliveryOrderStatus.ASSIGNED.getCode())) {
+            if (existing.getRiderId() != null && !Objects.equals(existing.getRiderId(), riderId)) {
+                throw new BizException(ErrorCode.DELIVERY_RIDER_MISMATCH);
+            }
+            throw new BizException(ErrorCode.DELIVERY_STATE_INVALID);
+        }
+        if (existing.getRiderId() != null && !Objects.equals(existing.getRiderId(), riderId)) {
+            throw new BizException(ErrorCode.DELIVERY_RIDER_MISMATCH);
+        }
+
+        if (deliveryOrderMapper.reject(orderId, riderId, releaseToHall) != 1) {
+            DeliveryOrder latest = requireDelivery(orderId);
+            if (latest.getRiderId() != null && !Objects.equals(latest.getRiderId(), riderId)) {
+                throw new BizException(ErrorCode.DELIVERY_RIDER_MISMATCH);
+            }
+            throw new BizException(ErrorCode.DELIVERY_STATE_INVALID);
+        }
+        return requireDelivery(orderId);
+    }
+
     private DeliveryOrder requireDelivery(Long orderId) {
         DeliveryOrder delivery = deliveryOrderMapper.findByOrderId(orderId);
         if (delivery == null) {

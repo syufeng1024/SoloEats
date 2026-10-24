@@ -54,6 +54,12 @@ public enum ErrorCode {
     DELIVERY_NOT_FOUND(50003, "配送单不存在", HttpStatus.NOT_FOUND),
     DELIVERY_STATE_INVALID(50004, "配送单状态不允许当前操作", HttpStatus.CONFLICT),
     DELIVERY_RIDER_MISMATCH(50005, "骑手与配送单不匹配", HttpStatus.CONFLICT),
+    RIDER_NOT_CERTIFIED(50006, "骑手未通过实名认证", HttpStatus.FORBIDDEN),
+    RIDER_OFFLINE(50007, "骑手未上线", HttpStatus.CONFLICT),
+    RIDER_ORDER_LIMIT(50008, "骑手进行中订单已达上限", HttpStatus.CONFLICT),
+    RIDER_HEALTH_CERT_EXPIRED(50009, "健康证已过期", HttpStatus.FORBIDDEN),
+    DISPATCH_EXPIRED(50010, "派单已超时", HttpStatus.CONFLICT),
+    FREIGHT_OUT_OF_RANGE(50011, "超出配送范围", HttpStatus.BAD_REQUEST),
 
     SETTLEMENT_NOT_FOUND(60001, "结算单不存在", HttpStatus.NOT_FOUND),
     SETTLEMENT_STATE_INVALID(60002, "结算状态不一致", HttpStatus.CONFLICT),

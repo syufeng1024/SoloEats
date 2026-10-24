@@ -45,6 +45,9 @@ public class DeliveryOrder {
 
     private LocalDateTime dispatchExpireAt;
 
+    /** 承诺送达时间（V14 增列，准时率与超时罚款的数据来源）。 */
+    private LocalDateTime promiseDeliverAt;
+
     private LocalDateTime acceptedAt;
 
     private LocalDateTime pickedUpAt;

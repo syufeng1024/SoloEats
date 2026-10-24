@@ -68,4 +68,24 @@ public interface DeliveryOrderMapper extends BaseMapper<DeliveryOrder> {
             """)
     int delivered(@Param("orderId") Long orderId,
                   @Param("riderId") Long riderId);
+
+    /**
+     * 拒单只累加派单次数；重试耗尽时释放骑手并退回待派单（10 -> 0）。
+     * 条件里限定 status = 10，避免覆盖其他骑手的接单结果。
+     */
+    @Update("""
+            UPDATE t_delivery_order
+            SET dispatch_count = dispatch_count + 1,
+                rider_id = CASE WHEN #{releaseToHall} THEN NULL ELSE rider_id END,
+                status = CASE WHEN #{releaseToHall} THEN 0 ELSE status END,
+                dispatch_expire_at = CASE WHEN #{releaseToHall} THEN NULL ELSE dispatch_expire_at END,
+                version = version + 1,
+                updated_at = NOW(3)
+            WHERE order_id = #{orderId}
+              AND status = 10
+              AND (rider_id = #{riderId} OR rider_id IS NULL)
+            """)
+    int reject(@Param("orderId") Long orderId,
+               @Param("riderId") Long riderId,
+               @Param("releaseToHall") boolean releaseToHall);
 }
