@@ -42,4 +42,10 @@ public interface DeliveryService {
      * 仅当配送单仍处于已派单（10）且 rider_id 为空或等于该骑手时生效。
      */
     DeliveryOrder reject(Long orderId, Long riderId, boolean releaseToHall);
+
+    /**
+     * 改派释放：仅当配送单仍由该骑手持有且处于 10/20/30/40 时生效，
+     * 清空 rider_id、退回 0 待派单并重置派单次数与倒计时。不改 order_id / delivery_no。
+     */
+    DeliveryOrder releaseForReassign(Long orderId, Long riderId);
 }

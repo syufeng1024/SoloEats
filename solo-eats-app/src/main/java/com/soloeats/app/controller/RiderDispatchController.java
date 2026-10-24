@@ -1,7 +1,10 @@
 package com.soloeats.app.controller;
 
+import com.soloeats.app.dto.DeliverRequest;
 import com.soloeats.app.dto.GoOnlineRequest;
 import com.soloeats.app.dto.RejectDispatchRequest;
+import com.soloeats.app.dto.ReportAnomalyRequest;
+import com.soloeats.app.dto.ReportTrackRequest;
 import com.soloeats.app.dto.SubmitCertificationRequest;
 import com.soloeats.common.api.ApiResponse;
 import com.soloeats.common.auth.AuthContext;
@@ -10,7 +13,9 @@ import com.soloeats.common.auth.Roles;
 import com.soloeats.common.exception.BizException;
 import com.soloeats.common.exception.ErrorCode;
 import com.soloeats.common.idempotency.Idempotent;
+import com.soloeats.delivery.service.DeliveryTrackService;
 import com.soloeats.delivery.service.RiderDispatchService;
+import com.soloeats.delivery.service.RiderFulfillmentService;
 import com.soloeats.delivery.service.RiderOnlineService;
 import com.soloeats.delivery.service.RiderService;
 import com.soloeats.delivery.service.command.SubmitCertificationCommand;
@@ -45,6 +50,8 @@ public class RiderDispatchController {
     private final RiderService riderService;
     private final RiderOnlineService riderOnlineService;
     private final RiderDispatchService riderDispatchService;
+    private final RiderFulfillmentService riderFulfillmentService;
+    private final DeliveryTrackService deliveryTrackService;
 
     @Idempotent(ttlSeconds = 10)
     @PostMapping("/certification")
@@ -111,6 +118,35 @@ public class RiderDispatchController {
     @PostMapping("/deliveries/{id}/grab")
     public ApiResponse<DeliveryActionView> grab(@PathVariable("id") Long deliveryId) {
         return ApiResponse.ok(riderDispatchService.grab(deliveryId, currentRiderId()));
+    }
+
+    @PostMapping("/deliveries/{id}/pickup")
+    public ApiResponse<DeliveryActionView> pickup(@PathVariable("id") Long deliveryId) {
+        return ApiResponse.ok(riderFulfillmentService.pickup(deliveryId, currentRiderId()));
+    }
+
+    @PostMapping("/deliveries/{id}/delivered")
+    public ApiResponse<DeliveryActionView> delivered(
+            @PathVariable("id") Long deliveryId,
+            @RequestBody(required = false) DeliverRequest request) {
+        DeliverRequest body = request == null ? new DeliverRequest(null, null, null) : request;
+        return ApiResponse.ok(riderFulfillmentService.deliver(
+                deliveryId, currentRiderId(), body.lng(), body.lat(), body.photoFileId()));
+    }
+
+    @PostMapping("/deliveries/{id}/anomaly")
+    public ApiResponse<Void> reportAnomaly(
+            @PathVariable("id") Long deliveryId,
+            @Valid @RequestBody ReportAnomalyRequest request) {
+        riderFulfillmentService.reportAnomaly(deliveryId, currentRiderId(),
+                request.type(), request.remark(), request.images());
+        return ApiResponse.ok();
+    }
+
+    @PostMapping("/track")
+    public ApiResponse<Void> reportTrack(@Valid @RequestBody ReportTrackRequest request) {
+        deliveryTrackService.report(currentRiderId(), request.toCommands());
+        return ApiResponse.ok();
     }
 
     private Long currentRiderId() {

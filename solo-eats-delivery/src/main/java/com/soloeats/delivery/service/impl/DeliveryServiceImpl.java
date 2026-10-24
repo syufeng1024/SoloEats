@@ -191,6 +191,23 @@ public class DeliveryServiceImpl implements DeliveryService {
         return requireDelivery(orderId);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DeliveryOrder releaseForReassign(Long orderId, Long riderId) {
+        DeliveryOrder existing = requireDelivery(orderId);
+        if (riderId == null || !Objects.equals(existing.getRiderId(), riderId)) {
+            throw new BizException(ErrorCode.DELIVERY_RIDER_MISMATCH);
+        }
+        if (deliveryOrderMapper.releaseForReassign(orderId, riderId) != 1) {
+            DeliveryOrder latest = requireDelivery(orderId);
+            if (!Objects.equals(latest.getRiderId(), riderId)) {
+                throw new BizException(ErrorCode.DELIVERY_RIDER_MISMATCH);
+            }
+            throw new BizException(ErrorCode.DELIVERY_STATE_INVALID, "当前配送单状态不允许改派");
+        }
+        return requireDelivery(orderId);
+    }
+
     private DeliveryOrder requireDelivery(Long orderId) {
         DeliveryOrder delivery = deliveryOrderMapper.findByOrderId(orderId);
         if (delivery == null) {

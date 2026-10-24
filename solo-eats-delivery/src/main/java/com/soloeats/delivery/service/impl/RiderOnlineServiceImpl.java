@@ -171,6 +171,27 @@ public class RiderOnlineServiceImpl implements RiderOnlineService {
         return load == null ? 0 : load;
     }
 
+    @Override
+    public void refreshPosition(Long riderId, BigDecimal lng, BigDecimal lat) {
+        if (riderId == null) {
+            return;
+        }
+        validateCoordinate(lng, lat);
+        String onlineKey = onlineKey(riderId);
+        if (!Boolean.TRUE.equals(redisTemplate.hasKey(onlineKey))) {
+            // key 已过期说明骑手已离线，轨迹上报不能把在线状态复活
+            return;
+        }
+        redisTemplate.opsForGeo().add(GEO_KEY,
+                new Point(lng.doubleValue(), lat.doubleValue()), String.valueOf(riderId));
+        Map<String, String> fields = new HashMap<>(4);
+        fields.put("lng", lng.toPlainString());
+        fields.put("lat", lat.toPlainString());
+        fields.put("lastPing", String.valueOf(System.currentTimeMillis()));
+        redisTemplate.opsForHash().putAll(onlineKey, fields);
+        redisTemplate.expire(onlineKey, ONLINE_TTL_SECONDS, TimeUnit.SECONDS);
+    }
+
     private int currentLoad(Long riderId) {
         Long count = deliveryOrderMapper.selectCount(new LambdaQueryWrapper<DeliveryOrder>()
                 .eq(DeliveryOrder::getRiderId, riderId)

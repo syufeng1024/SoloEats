@@ -88,4 +88,37 @@ public interface DeliveryOrderMapper extends BaseMapper<DeliveryOrder> {
     int reject(@Param("orderId") Long orderId,
                @Param("riderId") Long riderId,
                @Param("releaseToHall") boolean releaseToHall);
+
+    /**
+     * 接单后回填承诺送达时间。只写 promise_deliver_at，不改状态。
+     */
+    @Update("""
+            UPDATE t_delivery_order
+            SET promise_deliver_at = #{promiseDeliverAt},
+                version = version + 1,
+                updated_at = NOW(3)
+            WHERE id = #{id}
+            """)
+    int updatePromiseDeliverAt(@Param("id") Long id,
+                               @Param("promiseDeliverAt") LocalDateTime promiseDeliverAt);
+
+    /**
+     * 改派释放：rider_id 置空、退回待派单、派单次数与倒计时清零。
+     * 条件限定原骑手与履约中状态，避免并发覆盖新骑手的接单结果。
+     */
+    @Update("""
+            UPDATE t_delivery_order
+            SET rider_id = NULL,
+                status = 0,
+                dispatch_count = 0,
+                dispatch_expire_at = NULL,
+                promise_deliver_at = NULL,
+                version = version + 1,
+                updated_at = NOW(3)
+            WHERE order_id = #{orderId}
+              AND rider_id = #{riderId}
+              AND status IN (10, 20, 30, 40)
+            """)
+    int releaseForReassign(@Param("orderId") Long orderId,
+                           @Param("riderId") Long riderId);
 }

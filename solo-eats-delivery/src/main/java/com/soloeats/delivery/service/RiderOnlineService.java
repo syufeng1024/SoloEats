@@ -28,4 +28,10 @@ public interface RiderOnlineService {
 
     /** Redis Hash 中的 load；缺失按 0 处理。 */
     int getLoad(Long riderId);
+
+    /**
+     * 轨迹上报时刷新实时位置：更新 rider:geo 与 rider:online:{riderId} 的
+     * lng/lat/lastPing 并续期 TTL。骑手已离线（key 过期）时直接返回，不复活在线状态。
+     */
+    void refreshPosition(Long riderId, BigDecimal lng, BigDecimal lat);
 }

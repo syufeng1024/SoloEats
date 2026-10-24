@@ -25,9 +25,12 @@ import com.soloeats.delivery.service.view.HallOrderView;
 import com.soloeats.delivery.service.view.NearbyRiderView;
 import com.soloeats.delivery.service.view.PendingDispatchView;
 import com.soloeats.delivery.service.view.RiderPositionView;
+import com.soloeats.store.service.ShopService;
+import com.soloeats.store.service.view.ShopDetailView;
 import com.soloeats.store.support.GeoUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +54,8 @@ public class RiderDispatchServiceImpl implements RiderDispatchService {
     private static final int RECORD_REJECTED = 2;
     private static final long LOCK_WAIT_SECONDS = 3L;
     private static final long LOCK_LEASE_SECONDS = 3L;
+    private static final int DEFAULT_PREP_MINUTES = 15;
+    private static final int DEFAULT_AVG_SPEED_M_PER_MIN = 250;
 
     private final DeliveryService deliveryService;
     private final DeliveryOrderMapper deliveryOrderMapper;
@@ -60,6 +65,11 @@ public class RiderDispatchServiceImpl implements RiderDispatchService {
     private final DispatchConfigService dispatchConfigService;
     private final DispatchStrategy dispatchStrategy;
     private final DistributedLock distributedLock;
+    private final ShopService shopService;
+
+    /** 承诺送达时间估算速度（米/分钟），从配置读取，缺省 250。 */
+    @Value("${app.dispatch.avg-speed-m-per-min:250}")
+    private int avgSpeedMPerMin;
 
     @Override
     public List<PendingDispatchView> pendingDispatches(Long riderId) {
@@ -144,6 +154,7 @@ public class RiderDispatchServiceImpl implements RiderDispatchService {
 
         assertCanTakeOrder(riderId);
         DeliveryOrder accepted = deliveryService.accept(delivery.getOrderId(), riderId);
+        backfillPromiseDeliverAt(accepted);
         log.info("rider accepted delivery deliveryId={} riderId={}", deliveryId, riderId);
         return toView(accepted);
     }
@@ -263,6 +274,7 @@ public class RiderDispatchServiceImpl implements RiderDispatchService {
 
         assertCanTakeOrder(riderId);
         DeliveryOrder accepted = deliveryService.accept(delivery.getOrderId(), riderId);
+        backfillPromiseDeliverAt(accepted);
         log.info("rider grabbed delivery deliveryId={} riderId={}", deliveryId, riderId);
         return toView(accepted);
     }
@@ -303,6 +315,36 @@ public class RiderDispatchServiceImpl implements RiderDispatchService {
                     .thenComparing(byDistance);
         }
         return byDistance;
+    }
+
+    /**
+     * 接单成功后回填承诺送达时间：now + 门店出餐时长 + ceil(distance_m / avg_speed)。
+     * 只更新 promise_deliver_at，不改配送单状态。
+     */
+    private void backfillPromiseDeliverAt(DeliveryOrder delivery) {
+        int prepMinutes = resolvePrepMinutes(delivery.getShopId());
+        int distanceM = delivery.getDistanceM() == null ? 0 : Math.max(delivery.getDistanceM(), 0);
+        int avgSpeed = avgSpeedMPerMin > 0 ? avgSpeedMPerMin : DEFAULT_AVG_SPEED_M_PER_MIN;
+        int travelMinutes = (distanceM + avgSpeed - 1) / avgSpeed;
+        LocalDateTime promise = LocalDateTime.now().plusMinutes((long) prepMinutes + travelMinutes);
+        deliveryOrderMapper.updatePromiseDeliverAt(delivery.getId(), promise);
+        log.info("delivery promise backfilled deliveryId={} prepMinutes={} distanceM={} promiseDeliverAt={}",
+                delivery.getId(), prepMinutes, distanceM, promise);
+    }
+
+    /** 门店出餐时长读不到时按 15 分钟兜底，不阻塞接单。 */
+    private int resolvePrepMinutes(Long shopId) {
+        if (shopId == null) {
+            return DEFAULT_PREP_MINUTES;
+        }
+        try {
+            ShopDetailView shop = shopService.detail(shopId);
+            Integer prepMinutes = shop == null ? null : shop.prepMinutes();
+            return prepMinutes == null || prepMinutes <= 0 ? DEFAULT_PREP_MINUTES : prepMinutes;
+        } catch (BizException ex) {
+            log.warn("shop prep minutes unavailable shopId={} code={}", shopId, ex.getCode());
+            return DEFAULT_PREP_MINUTES;
+        }
     }
 
     private DeliveryOrder requireDelivery(Long deliveryId) {

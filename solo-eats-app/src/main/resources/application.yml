@@ -206,6 +206,8 @@ app:
   dispatch:
     expire-seconds: ${DISPATCH_EXPIRE_SECONDS:15}
     max-retry: ${DISPATCH_MAX_RETRY:3}
+    # 承诺送达时间估算速度（米/分钟），接单时 promise_deliver_at = now + 出餐 + ceil(distance/avg)
+    avg-speed-m-per-min: ${DISPATCH_AVG_SPEED_M_PER_MIN:250}
   settlement:
     bill-cron: "${SETTLEMENT_BILL_CRON:0 0 2 * * ?}"
     default-commission-rate: ${DEFAULT_COMMISSION_RATE:0.0600}
