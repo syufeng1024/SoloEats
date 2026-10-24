@@ -20,6 +20,7 @@ import com.soloeats.order.mapper.OrderMapper;
 import com.soloeats.order.mapper.OrderStatusLogMapper;
 import com.soloeats.order.service.command.CreateOrderCommand;
 import com.soloeats.order.service.event.OrderCreatedEvent;
+import com.soloeats.order.service.event.OrderStatusChangedEvent;
 import com.soloeats.order.service.result.CreateOrderResult;
 import com.soloeats.product.domain.entity.Sku;
 import com.soloeats.product.service.SkuService;
@@ -236,6 +237,8 @@ public class OrderApplicationService {
         log.setOperatorId(operatorId);
         log.setRequestId(StringUtils.hasText(requestId) ? requestId : UUID.randomUUID().toString());
         orderStatusLogMapper.insert(log);
+        eventPublisher.publishEvent(new OrderStatusChangedEvent(
+                orderId, order.getUserId(), order.getOrderNo(), from.getCode(), to.getCode()));
         return to;
     }
 

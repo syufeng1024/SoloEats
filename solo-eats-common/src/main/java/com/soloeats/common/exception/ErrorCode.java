@@ -85,7 +85,13 @@ public enum ErrorCode {
     SMS_CODE_EXPIRED(80004, "验证码已过期", HttpStatus.BAD_REQUEST),
     ADDRESS_LIMIT_EXCEEDED(80005, "收货地址数量已达上限", HttpStatus.CONFLICT),
     WALLET_BALANCE_NOT_ENOUGH(80006, "钱包余额不足", HttpStatus.CONFLICT),
-    WALLET_AMOUNT_INVALID(80007, "钱包金额不合法", HttpStatus.BAD_REQUEST);
+    WALLET_AMOUNT_INVALID(80007, "钱包金额不合法", HttpStatus.BAD_REQUEST),
+
+    // T08 消息中心（9xxxx 段）
+    IM_SESSION_NOT_FOUND(90001, "会话不存在", HttpStatus.NOT_FOUND),
+    IM_SESSION_CLOSED(90002, "会话已结束或只读", HttpStatus.CONFLICT),
+    IM_NOT_PARTICIPANT(90003, "非会话参与者", HttpStatus.FORBIDDEN),
+    WS_UNAUTHORIZED(90004, "WebSocket 鉴权失败", HttpStatus.UNAUTHORIZED);
 
     private final int code;
     private final String message;

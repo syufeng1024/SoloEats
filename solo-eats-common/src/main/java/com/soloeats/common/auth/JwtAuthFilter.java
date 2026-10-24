@@ -32,6 +32,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate redisTemplate;
 
+    /**
+     * WS 握手不走 Bearer 头：{@code /ws?token=...} 由 MessageWebSocketHandler 自行校验。
+     * 仅放行握手路径，业务接口（/api/**）鉴权不变。
+     */
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        return uri != null && ("/ws".equals(uri) || uri.startsWith("/ws/"));
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,

@@ -191,4 +191,4 @@ curl -s http://localhost:8080/api/v1/im/sessions/1/messages -H "Authorization: B
 
 | 日期 | 会话范围 | 新增/修改文件 | 编译结果 | 遗留问题 |
 |---|---|---|---|---|
-| _待填_ | | | | |
+| 2026-10-25 | T08 阶段A（站内信、WebSocket 通道、订单节点实时推送、消息模板、通知开关；不做 IM 会话） | 新增 45 / 修改 5（另本卡执行记录 1 处） | 本机 PowerShell 禁执行 `mvn`/`java`，构建经 `maven:3.9-eclipse-temurin-17` 容器对同一工作区执行：`mvn -B clean -DskipTests package` BUILD SUCCESS（14 模块，common 41 / message 29 / app 155 个源文件全量重编）；`mvn -pl solo-eats-message -am test` BUILD SUCCESS；`mvn -pl solo-eats-order -am test` BUILD SUCCESS（order 25 个测试全绿） | 迁移号改为 **V17**（V16 已被 T07-B2 占用），菜单权限 id 104~107，挂在「内容运营」(id=9) 下。新增测试 `MessageTemplateServiceImplTest` 4 + `SiteMessageServiceImplTest` 4 全绿。WS 走原生 `/ws?token=`，未引入 STOMP/SockJS；握手校验放在 `MessageWebSocketHandler.afterConnectionEstablished`（未单独建 `WsHandshakeInterceptor`），`JwtAuthFilter.shouldNotFilter` 放行 `/ws`。阶段A 只做接口 1~8、15~16；`t_im_session`/`t_im_message` 已建表但无读写代码（阶段B）。`PushService` 只直推本机会话，多实例 Redis Pub/Sub 广播留 `TODO(P1 多实例)`。订单状态仅 10/20/50 映射三张模板，其余状态只推 WS 不落站内信。`t_site_message`/`t_push_log` 按任务卡只建 `created_at`，未加 `updated_at`。消息保留期清理、心跳超时踢连接、站内信删除均未做 |

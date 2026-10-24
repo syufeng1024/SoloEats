@@ -30,6 +30,7 @@
         <module>solo-eats-order</module>
         <module>solo-eats-payment</module>
         <module>solo-eats-settlement</module>
+        <module>solo-eats-message</module>
         <module>solo-eats-app</module>
     </modules>
 
@@ -172,6 +173,11 @@
             <dependency>
                 <groupId>com.soloeats</groupId>
                 <artifactId>solo-eats-settlement</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.soloeats</groupId>
+                <artifactId>solo-eats-message</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>
