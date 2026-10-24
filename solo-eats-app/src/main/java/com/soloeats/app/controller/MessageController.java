@@ -17,8 +17,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 当前登录者的消息中心。receiverType 由 roles 推断，receiverId 取 AuthContext.userId()，
- * 不接受前端传参，天然杜绝越权查他人消息。
+ * 当前登录者的消息中心。receiverType 由 roles 推断，
+ * receiverId 由 {@link CurrentReceiver#receiverId(UserPrincipal)} 解析为业务主体 ID
+ * （用户=userId、商家=merchantId、骑手=riderId），不接受前端传参，天然杜绝越权查他人消息。
  */
 @RestController
 @RequestMapping("/api/v1/messages")
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MessageController {
 
     private final SiteMessageService siteMessageService;
+    private final CurrentReceiver currentReceiver;
 
     @GetMapping
     public ApiResponse<PageResult<SiteMessageView>> page(
@@ -33,10 +35,10 @@ public class MessageController {
             @RequestParam(required = false) Integer readFlag,
             @RequestParam(defaultValue = "1") long pageNum,
             @RequestParam(defaultValue = "20") long pageSize) {
-        UserPrincipal principal = CurrentReceiver.principal();
+        UserPrincipal principal = currentReceiver.principal();
         return ApiResponse.ok(siteMessageService.page(
-                CurrentReceiver.receiverType(principal),
-                principal.userId(),
+                currentReceiver.receiverType(principal),
+                currentReceiver.receiverId(principal),
                 new SiteMessageQuery(msgType, readFlag),
                 pageNum,
                 pageSize));
@@ -44,22 +46,23 @@ public class MessageController {
 
     @GetMapping("/unread-count")
     public ApiResponse<UnreadCountView> unreadCount() {
-        UserPrincipal principal = CurrentReceiver.principal();
+        UserPrincipal principal = currentReceiver.principal();
         return ApiResponse.ok(siteMessageService.unreadCount(
-                CurrentReceiver.receiverType(principal), principal.userId()));
+                currentReceiver.receiverType(principal), currentReceiver.receiverId(principal)));
     }
 
     @PutMapping("/{id}/read")
     public ApiResponse<Void> markRead(@PathVariable Long id) {
-        UserPrincipal principal = CurrentReceiver.principal();
-        siteMessageService.markRead(id, CurrentReceiver.receiverType(principal), principal.userId());
+        UserPrincipal principal = currentReceiver.principal();
+        siteMessageService.markRead(id, currentReceiver.receiverType(principal),
+                currentReceiver.receiverId(principal));
         return ApiResponse.ok();
     }
 
     @PutMapping("/read-all")
     public ApiResponse<Integer> markAllRead(@RequestParam(required = false) Integer msgType) {
-        UserPrincipal principal = CurrentReceiver.principal();
+        UserPrincipal principal = currentReceiver.principal();
         return ApiResponse.ok(siteMessageService.markAllRead(
-                CurrentReceiver.receiverType(principal), principal.userId(), msgType));
+                currentReceiver.receiverType(principal), currentReceiver.receiverId(principal), msgType));
     }
 }

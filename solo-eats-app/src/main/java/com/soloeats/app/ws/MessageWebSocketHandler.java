@@ -1,8 +1,10 @@
 package com.soloeats.app.ws;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.soloeats.app.security.CurrentReceiver;
 import com.soloeats.common.auth.JwtUtils;
 import com.soloeats.common.auth.UserPrincipal;
+import com.soloeats.common.exception.BizException;
 import com.soloeats.message.domain.enums.ReceiverType;
 import com.soloeats.message.ws.WebSocketSessionRegistry;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,9 @@ import java.util.Map;
  * <p>鉴权只认 query 里的 token：握手是 HTTP 请求但不带 Authorization 头，
  * 且绝不能信任前端传来的 userId。校验失败一律 1008 关闭，
  * 不让未授权连接进入注册表。
+ *
+ * <p>注册 key 必须是业务主体 ID（商家 merchantId、骑手 riderId），
+ * 与 PushService.push 的目标同源；用系统用户 ID 注册会让推送永远落空。
  */
 @Slf4j
 @Component
@@ -37,6 +42,7 @@ public class MessageWebSocketHandler extends TextWebSocketHandler {
     private final JwtUtils jwtUtils;
     private final WebSocketSessionRegistry sessionRegistry;
     private final ObjectMapper objectMapper;
+    private final CurrentReceiver currentReceiver;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -55,13 +61,21 @@ public class MessageWebSocketHandler extends TextWebSocketHandler {
         }
 
         Integer receiverType = ReceiverType.resolve(principal.roles());
-        if (principal.userId() == null || receiverType == null) {
+        if (receiverType == null) {
             reject(session, "unresolved identity");
             return;
         }
 
+        Long receiverId;
+        try {
+            receiverId = currentReceiver.receiverId(principal);
+        } catch (BizException ex) {
+            reject(session, "unresolved identity: " + ex.getMessage());
+            return;
+        }
+
         session.getAttributes().put(ATTR_TENANT_ID, principal.tenantId());
-        sessionRegistry.register(receiverType, principal.userId(), session);
+        sessionRegistry.register(receiverType, receiverId, session);
         send(session, Map.of("type", "CONNECTED"));
     }
 

@@ -78,6 +78,50 @@ solo-eats-app/src/main/resources/db/migration/   # Flyway：V<序号>__<描述>.
 11. 方法参数名保留（`-parameters` 已开启，`@PathVariable Long id` 必须写名字）。
 12. 不写 `System.out`/`printStackTrace`；日志用 `@Slf4j`，带 `traceId`。
 
+## 4.1 身份与标识口径（强制，历史踩坑点）
+
+> 这三条规则各自都曾被违反过，症状都是「单测全绿、真实链路不通」。改任何鉴权/消息/推送代码前先读本节。
+
+### (1) 角色判定：一律用「角色族」匹配，禁止精确相等
+
+账号的角色码是**细粒度**的（V4 种子：`ADMIN_OPERATION`、`ADMIN_FINANCE`、`MERCHANT_MANAGER`、`MERCHANT_CLERK`、`RIDER`），而代码里声明的是**粗粒度族码**（`Roles.ADMIN`/`MERCHANT`/`RIDER`）。
+
+判定必须写成：`role.equals(required) || role.startsWith(required + "_")`。
+
+- **禁止** `roles.contains(Roles.MERCHANT)`、`Set.of("MERCHANT").equals(...)` 之类精确匹配。
+- 已有实现：`RoleAuthInterceptor#matches`、`ReceiverType#matchesFamily`。新增角色判定**必须复用**，不要另写。
+- 踩坑记录：`@RequireRole(MERCHANT)` 精确匹配导致商家所有接口 10004；`ReceiverType.resolve` 同样写法导致商家收不到站内信。
+
+### (2) 主体标识：一律用「业务 ID」，禁止混用系统用户 ID
+
+| 身份 | 语义 ID | 取自 |
+|---|---|---|
+| `C_USER` 消费者 | `t_member_user.id` | `principal.userId()` |
+| `MERCHANT` 商家 | `t_merchant.id` | `principal.merchantId()` |
+| `RIDER` 骑手 | `t_rider.id` | 按 `principal.userId()` 反查 |
+| `ADMIN` 平台 | `t_sys_user.id` | `principal.userId()` |
+
+统一出口：`solo-eats-app/.../security/CurrentReceiver#receiverId(principal)`。
+
+凡是用于以下用途的 id，**必须**走这个出口：
+
+- `t_site_message.receiver_id`
+- `t_notify_setting.receiver_id`
+- `WebSocketSessionRegistry` 的 key（`{receiverType}:{receiverId}`）
+- `t_im_session.user_id` / `peer_id`
+- `PushService.push(receiverType, receiverId, ...)` 的 `receiverId`
+
+**禁止**在这些位置直接用 `principal.userId()`——商家/骑手的系统用户 ID 与业务 ID 不是同一个值。
+
+踩坑记录：WS 注册用 `userId`（商家=4）、推送用 `merchantId`（=1），两套 key 对不上，商家与骑手的实时推送全部静默丢失，`t_push_log` 里表现为 `status=2 error_msg=offline`。
+
+### (3) 校验顺序：先鉴权，再查业务对象
+
+越权类接口必须**先**校验归属再返回数据，且要以「资源不存在」与「不属于你」区分得当（归属不符统一 `10004`）：
+
+- 查 `deliveryId` 轨迹前，必须校验该配送单的 `order_id` 属于当前用户（app 层通过 `OrderQueryService#belongsToUser`）。
+- 操作 `t_member_address`、`t_im_session` 等带 `user_id` 的资源前，必须比对 `user_id == 当前主体业务 ID`，**不得**只按主键读写。
+
 ## 5. 构建与验证命令
 
 ```bash

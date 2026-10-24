@@ -216,6 +216,9 @@ app:
     mock-recharge-enabled: ${WALLET_MOCK_RECHARGE_ENABLED:true}
   idempotency:
     ttl-hours: ${IDEMPOTENCY_TTL_HOURS:24}
+  im:
+    # 订单完成后会话保留天数，超过后转 status=2 只读；阶段B 只下发配置，扫描任务尚未接入
+    readonly-after-days: 7
   minio:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     access-key: ${MINIO_ROOT_USER:change_me_minio}

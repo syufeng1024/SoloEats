@@ -22,20 +22,21 @@ import java.util.List;
 public class NotifySettingController {
 
     private final NotifySettingService notifySettingService;
+    private final CurrentReceiver currentReceiver;
 
     @GetMapping
     public ApiResponse<List<NotifySettingView>> get() {
-        UserPrincipal principal = CurrentReceiver.principal();
+        UserPrincipal principal = currentReceiver.principal();
         return ApiResponse.ok(notifySettingService.get(
-                CurrentReceiver.receiverType(principal), principal.userId()));
+                currentReceiver.receiverType(principal), currentReceiver.receiverId(principal)));
     }
 
     @PutMapping
     public ApiResponse<NotifySettingView> update(@Valid @RequestBody UpdateNotifySettingRequest request) {
-        UserPrincipal principal = CurrentReceiver.principal();
+        UserPrincipal principal = currentReceiver.principal();
         return ApiResponse.ok(notifySettingService.update(
-                CurrentReceiver.receiverType(principal),
-                principal.userId(),
+                currentReceiver.receiverType(principal),
+                currentReceiver.receiverId(principal),
                 request.notifyType(),
                 Boolean.TRUE.equals(request.enabled())));
     }
