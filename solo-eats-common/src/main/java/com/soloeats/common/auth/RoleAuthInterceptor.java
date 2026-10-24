@@ -51,19 +51,28 @@ public class RoleAuthInterceptor implements HandlerInterceptor {
     }
 
     /**
-     * 平台后台细分为 8 个角色（ADMIN、ADMIN_OPERATION、ADMIN_PRODUCT …，规格书 3.1），
-     * 类级 {@code @RequireRole(Roles.ADMIN)} 不应把其余 7 个平台角色挡在门外。
+     * 角色族（role family）匹配：token 角色码与 required 精确相等，或以 {@code required + "_"} 开头。
+     * <p>V4__system_rbac.sql 的种子角色是细粒度角色码：平台侧 ADMIN_OPERATION / ADMIN_PRODUCT …，
+     * 商家侧 MERCHANT_MANAGER / MERCHANT_CLERK，骑手侧只有 RIDER。Controller 上声明的是粗粒度族码
+     * {@link Roles#ADMIN} / {@link Roles#MERCHANT}，因此 {@code @RequireRole(MERCHANT)} 必须放行
+     * MERCHANT_MANAGER、MERCHANT_CLERK，否则商家账号会在归属校验之前被 10004 拦下。
+     * <p>只认 {@code required + "_"} 前缀，不做包含匹配（MERCHANT 不会误匹配 AMERCHANT），
+     * 也不放行 {@code required.startsWith(role)}；RIDER / C_USER 种子里没有细分，仍只精确匹配。
      * 权限码仍由 PermissionInterceptor 精确校验，这里只放宽角色粗筛。
      */
     private boolean matches(UserPrincipal principal, String required) {
-        if (principal.hasRole(required)) {
-            return true;
-        }
-        if (!Roles.ADMIN.equals(required) || principal.roles() == null) {
+        if (principal.roles() == null || required == null) {
             return false;
         }
-        return principal.roles().stream()
-                .anyMatch(role -> role != null && role.startsWith(Roles.ADMIN));
+        for (String role : principal.roles()) {
+            if (role == null) {
+                continue;
+            }
+            if (role.equals(required) || role.startsWith(required + "_")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void write(HttpServletResponse response, int status, ErrorCode errorCode) throws IOException {
