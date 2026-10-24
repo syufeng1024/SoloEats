@@ -39,6 +39,11 @@ public class DeliveryServiceImpl implements DeliveryService {
     }
 
     @Override
+    public DeliveryOrder getById(Long deliveryId) {
+        return deliveryId == null ? null : deliveryOrderMapper.selectById(deliveryId);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public DeliveryOrder dispatch(Long orderId) {
         DeliveryOrder existing = requireDelivery(orderId);

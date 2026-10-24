@@ -12,6 +12,7 @@ import com.soloeats.delivery.service.DeliveryService;
 import com.soloeats.delivery.service.DeliveryTrackService;
 import com.soloeats.delivery.service.OrderExceptionPort;
 import com.soloeats.delivery.service.RiderFulfillmentService;
+import com.soloeats.delivery.service.RiderIncomeService;
 import com.soloeats.delivery.service.command.TrackPointCommand;
 import com.soloeats.delivery.service.view.DeliveryActionView;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,7 @@ public class RiderFulfillmentServiceImpl implements RiderFulfillmentService {
     private final DeliveryTrackService deliveryTrackService;
     private final RiderPingAnomalyMapper riderPingAnomalyMapper;
     private final OrderExceptionPort orderExceptionPort;
+    private final RiderIncomeService riderIncomeService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -60,6 +62,8 @@ public class RiderFulfillmentServiceImpl implements RiderFulfillmentService {
         }
         DeliveryOrder delivery = requireRiderDelivery(deliveryId, riderId);
         DeliveryOrder delivered = deliveryService.deliver(delivery.getOrderId(), riderId);
+        // 送达后按 t_rider_fee_rule 重算收入；DeliveryServiceImpl 已写入的兜底行在此原地更新
+        riderIncomeService.settle(deliveryId);
 
         if (lng != null) {
             deliveryTrackService.report(riderId, List.of(new TrackPointCommand(

@@ -8,6 +8,9 @@ public interface DeliveryService {
 
     DeliveryOrder getByOrderId(Long orderId);
 
+    /** 只读查询：按配送单主键取单，不存在返回 null。 */
+    DeliveryOrder getById(Long deliveryId);
+
     /**
      * 支付成功后为平台配送订单创建配送单，状态 0 待派单。
      */

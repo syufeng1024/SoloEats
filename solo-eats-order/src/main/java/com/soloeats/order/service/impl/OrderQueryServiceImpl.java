@@ -70,6 +70,16 @@ public class OrderQueryServiceImpl implements OrderQueryService {
     }
 
     @Override
+    public boolean belongsToUser(Long orderId, Long userId) {
+        if (orderId == null || userId == null) {
+            return false;
+        }
+        // t_order 无逻辑删除列，selectById 查不到即视为不存在（含已删除）
+        Order order = orderMapper.selectById(orderId);
+        return order != null && Objects.equals(order.getUserId(), userId);
+    }
+
+    @Override
     public AdminOrderMonitorResult monitor(AdminOrderQuery query) {
         if (query == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "查询条件不能为空");
