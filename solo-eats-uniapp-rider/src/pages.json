@@ -1,0 +1,81 @@
+{
+  "pages": [
+    {
+      "path": "pages/login/Login",
+      "style": {
+        "navigationBarTitleText": "骑手登录"
+      }
+    },
+    {
+      "path": "pages/home/Home",
+      "style": {
+        "navigationBarTitleText": "接单",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/task/List",
+      "style": {
+        "navigationBarTitleText": "我的任务",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/mine/Mine",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    },
+    {
+      "path": "pages/task/Detail",
+      "style": {
+        "navigationBarTitleText": "任务详情"
+      }
+    },
+    {
+      "path": "pages/cert/Cert",
+      "style": {
+        "navigationBarTitleText": "实名认证"
+      }
+    },
+    {
+      "path": "pages/cert/CertStatus",
+      "style": {
+        "navigationBarTitleText": "认证状态"
+      }
+    },
+    {
+      "path": "pages/income/Income",
+      "style": {
+        "navigationBarTitleText": "我的收入",
+        "enablePullDownRefresh": true
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "数创星光外卖骑手端",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F1F4F8"
+  },
+  "tabBar": {
+    "color": "#7A8699",
+    "selectedColor": "#FF7A00",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/home/Home",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/task/List",
+        "text": "任务"
+      },
+      {
+        "pagePath": "pages/mine/Mine",
+        "text": "我的"
+      }
+    ]
+  }
+}

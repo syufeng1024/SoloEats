@@ -166,4 +166,4 @@ cd solo-eats-uniapp-rider && npm ci && npm run build:h5
 
 | 日期 | 会话范围 | 新增文件 | 构建结果 | 遗留问题 |
 |---|---|---|---|---|
-| _待填_ | | | | |
+| 2026-10-25 | 阶段A：登录 → 认证 → 上线听单 → 派单/抢单 → 取货 → 送达 → 收入 → 我的（8 个路由页 + `DispatchPopup` 组件） | 新增 19 / 改写 4 / 删除 3 | `npm run build:h5` 通过，`dist/build/h5` 产出 8 个页面 chunk | ① `t_delivery_order` 无收货人手机号与经纬度列，未做拨号与地图导航，改为「平台保护」提示；② 骑手评分无下发给骑手端的接口，我的页显示「—」；③ 阶段A 未接 WS，首页用 5s 轮询 pending、30s 刷新大厅；④ 上传 bizType 只能复用白名单 `MERCHANT_QUAL`（证件）/`RECEIPT`（留证）；⑤ `maxConcurrentOrders` 后端未下发，store 取建表默认值 3，仅作提示，不参与放行判断 |
