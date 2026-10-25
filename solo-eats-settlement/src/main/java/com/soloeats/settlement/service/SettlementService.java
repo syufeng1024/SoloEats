@@ -30,4 +30,15 @@ public interface SettlementService {
     AdminSettlementStatsResult adminStats(Long merchantId, Integer status,
                                           LocalDate dateFrom, LocalDate dateTo,
                                           long pageNum, long pageSize);
+
+    /**
+     * 审核结算单：仅待审核（0）可审，通过 → 10 并记审核人/时间，驳回 → 40。
+     * remark 落应用日志与操作日志（t_settlement_bill 无审核意见列，本阶段不加列）。
+     */
+    void auditBill(Long billId, boolean pass, String remark, Long auditorId);
+
+    /**
+     * 模拟打款：仅审核通过（10）可打款 → 30，写 paid_at。不接真实支付通道。
+     */
+    void payBill(Long billId, Long operatorId);
 }

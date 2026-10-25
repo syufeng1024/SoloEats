@@ -203,4 +203,4 @@ curl -s http://localhost:8080/api/v1/admin/fund-flows/summary -H "Authorization:
 
 | 日期 | 会话范围 | 新增/修改文件 | 编译结果 | 既有测试 | 遗留问题 |
 |---|---|---|---|---|---|
-| _待填_ | | | | | |
+| 2026-10-25 | T16 阶段A：结算单审核→模拟打款、商家/骑手提现最小闭环 | 新增 14 / 修改 4（共 18） | `mvn -q -DskipTests package` BUILD SUCCESS；`mvn -pl solo-eats-settlement -am test` Tests run: 16, Failures: 0, Errors: 0 | SettlementServiceImplTest 5 例全绿 | 迁移号按实测库版本改为 V19（原卡写 V20）；阶段B 未做；提现余额校验为「SUM 查询 + INSERT」两步无账户级锁，并发下仍可能超提，待阶段B 补分布式锁；t_settlement_bill 无审核意见列，remark 仅进应用日志与 t_sys_oper_log |

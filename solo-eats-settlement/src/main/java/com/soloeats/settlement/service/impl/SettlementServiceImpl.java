@@ -260,6 +260,45 @@ public class SettlementServiceImpl implements SettlementService {
                 normalizedPageNum, normalizedPageSize);
     }
 
+    @Override
+    public void auditBill(Long billId, boolean pass, String remark, Long auditorId) {
+        if (billId == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "billId 不能为空");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        int target = pass ? 10 : 40;
+        int rows = settlementBillMapper.update(null, new LambdaUpdateWrapper<SettlementBill>()
+                .eq(SettlementBill::getId, billId)
+                .eq(SettlementBill::getStatus, 0)
+                .set(SettlementBill::getStatus, target)
+                .set(SettlementBill::getReviewedBy, auditorId)
+                .set(SettlementBill::getReviewedAt, now)
+                .set(SettlementBill::getUpdatedAt, now));
+        if (rows == 0) {
+            throw new BizException(ErrorCode.PAYOUT_STATE_INVALID, "仅待审核的结算单可审核");
+        }
+        log.info("settlement bill audited billId={} pass={} auditorId={} remark={}",
+                billId, pass, auditorId, remark);
+    }
+
+    @Override
+    public void payBill(Long billId, Long operatorId) {
+        if (billId == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "billId 不能为空");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        int rows = settlementBillMapper.update(null, new LambdaUpdateWrapper<SettlementBill>()
+                .eq(SettlementBill::getId, billId)
+                .eq(SettlementBill::getStatus, 10)
+                .set(SettlementBill::getStatus, 30)
+                .set(SettlementBill::getPaidAt, now)
+                .set(SettlementBill::getUpdatedAt, now));
+        if (rows == 0) {
+            throw new BizException(ErrorCode.PAYOUT_STATE_INVALID, "仅审核通过的结算单可打款");
+        }
+        log.info("settlement bill paid billId={} operatorId={}", billId, operatorId);
+    }
+
     private void applyAdminFilters(QueryWrapper<SettlementBill> wrapper, Long merchantId,
                                    Integer status, LocalDate dateFrom, LocalDate dateTo) {
         wrapper.eq(merchantId != null, "merchant_id", merchantId)

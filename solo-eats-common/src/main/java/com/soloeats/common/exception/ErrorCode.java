@@ -63,6 +63,8 @@ public enum ErrorCode {
 
     SETTLEMENT_NOT_FOUND(60001, "结算单不存在", HttpStatus.NOT_FOUND),
     SETTLEMENT_STATE_INVALID(60002, "结算状态不一致", HttpStatus.CONFLICT),
+    PAYOUT_AMOUNT_EXCEEDED(60004, "可提现余额不足", HttpStatus.CONFLICT),
+    PAYOUT_STATE_INVALID(60005, "提现单状态不允许当前操作", HttpStatus.CONFLICT),
 
     MERCHANT_NOT_FOUND(70001, "商家不存在", HttpStatus.NOT_FOUND),
     MERCHANT_STATUS_INVALID(70002, "商家状态不允许当前操作", HttpStatus.CONFLICT),
