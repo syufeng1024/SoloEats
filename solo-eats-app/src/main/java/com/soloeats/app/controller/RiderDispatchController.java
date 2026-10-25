@@ -6,7 +6,11 @@ import com.soloeats.app.dto.RejectDispatchRequest;
 import com.soloeats.app.dto.ReportAnomalyRequest;
 import com.soloeats.app.dto.ReportTrackRequest;
 import com.soloeats.app.dto.SubmitCertificationRequest;
+import com.soloeats.app.security.CurrentReceiver;
+import com.soloeats.app.vo.RiderTaskDetailView;
+import com.soloeats.app.vo.RiderTaskView;
 import com.soloeats.common.api.ApiResponse;
+import com.soloeats.common.api.PageResult;
 import com.soloeats.common.auth.AuthContext;
 import com.soloeats.common.auth.RequireRole;
 import com.soloeats.common.auth.Roles;
@@ -14,6 +18,7 @@ import com.soloeats.common.exception.BizException;
 import com.soloeats.common.exception.ErrorCode;
 import com.soloeats.common.idempotency.Idempotent;
 import com.soloeats.delivery.service.DeliveryTrackService;
+import com.soloeats.delivery.service.RiderDeliveryQueryService;
 import com.soloeats.delivery.service.RiderDispatchService;
 import com.soloeats.delivery.service.RiderFulfillmentService;
 import com.soloeats.delivery.service.RiderOnlineService;
@@ -23,6 +28,9 @@ import com.soloeats.delivery.service.view.DeliveryActionView;
 import com.soloeats.delivery.service.view.HallOrderView;
 import com.soloeats.delivery.service.view.MyCertificationView;
 import com.soloeats.delivery.service.view.PendingDispatchView;
+import com.soloeats.delivery.service.view.RiderDeliveryView;
+import com.soloeats.order.service.OrderQueryService;
+import com.soloeats.order.service.view.OrderItemBriefView;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,6 +44,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * 骑手端：认证、上下线、听单、抢单/拒单。
@@ -52,6 +62,9 @@ public class RiderDispatchController {
     private final RiderDispatchService riderDispatchService;
     private final RiderFulfillmentService riderFulfillmentService;
     private final DeliveryTrackService deliveryTrackService;
+    private final RiderDeliveryQueryService riderDeliveryQueryService;
+    private final OrderQueryService orderQueryService;
+    private final CurrentReceiver currentReceiver;
 
     @Idempotent(ttlSeconds = 10)
     @PostMapping("/certification")
@@ -115,6 +128,41 @@ public class RiderDispatchController {
         return ApiResponse.ok();
     }
 
+    @RequireRole(Roles.RIDER)
+    @GetMapping("/deliveries")
+    public ApiResponse<PageResult<RiderTaskView>> myDeliveries(
+            @RequestParam(required = false) Integer status,
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        Long riderId = currentReceiver.receiverId(AuthContext.require());
+        PageResult<RiderDeliveryView> page = riderDeliveryQueryService.pageMyDeliveries(
+                riderId, status, pageNum, pageSize);
+        List<Long> orderIds = page.list().stream()
+                .map(RiderDeliveryView::orderId)
+                .filter(Objects::nonNull)
+                .toList();
+        Map<Long, Integer> itemCounts = orderQueryService.itemCountByOrderIds(orderIds);
+        List<RiderTaskView> views = page.list().stream()
+                .map(view -> RiderTaskView.from(view, itemCount(itemCounts, view.orderId())))
+                .toList();
+        return ApiResponse.ok(PageResult.of(views, page.total(), page.pageNum(), page.pageSize()));
+    }
+
+    @RequireRole(Roles.RIDER)
+    @GetMapping("/deliveries/{deliveryId}")
+    public ApiResponse<RiderTaskDetailView> deliveryDetail(
+            @PathVariable("deliveryId") Long deliveryId) {
+        Long riderId = currentReceiver.receiverId(AuthContext.require());
+        RiderDeliveryView view = riderDeliveryQueryService.detail(riderId, deliveryId);
+        List<OrderItemBriefView> items = orderQueryService.listItemsByOrderId(view.orderId());
+        int itemCount = items.stream()
+                .map(OrderItemBriefView::quantity)
+                .filter(Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .sum();
+        return ApiResponse.ok(RiderTaskDetailView.from(view, itemCount, items));
+    }
+
     @PostMapping("/deliveries/{id}/grab")
     public ApiResponse<DeliveryActionView> grab(@PathVariable("id") Long deliveryId) {
         return ApiResponse.ok(riderDispatchService.grab(deliveryId, currentRiderId()));
@@ -151,5 +199,9 @@ public class RiderDispatchController {
 
     private Long currentRiderId() {
         return riderService.requireRiderIdByUserId(AuthContext.require().userId());
+    }
+
+    private int itemCount(Map<Long, Integer> counts, Long orderId) {
+        return orderId == null ? 0 : counts.getOrDefault(orderId, 0);
     }
 }

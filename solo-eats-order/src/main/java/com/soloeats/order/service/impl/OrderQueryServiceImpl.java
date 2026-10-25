@@ -23,6 +23,7 @@ import com.soloeats.order.service.view.AdminOrderSummary;
 import com.soloeats.order.service.view.AdminOrderView;
 import com.soloeats.order.service.view.MerchantOrderItemView;
 import com.soloeats.order.service.view.MerchantOrderView;
+import com.soloeats.order.service.view.OrderItemBriefView;
 import com.soloeats.order.service.view.OrderTimelineView;
 import com.soloeats.order.service.view.UserOrderDetailView;
 import com.soloeats.order.service.view.UserOrderItemView;
@@ -35,6 +36,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -183,6 +185,50 @@ public class OrderQueryServiceImpl implements OrderQueryService {
                 itemViews,
                 timeline
         );
+    }
+
+    @Override
+    public List<OrderItemBriefView> listItemsByOrderId(Long orderId) {
+        if (orderId == null) {
+            return List.of();
+        }
+        return orderItemMapper.selectList(new LambdaQueryWrapper<OrderItem>()
+                        .eq(OrderItem::getOrderId, orderId)
+                        .orderByAsc(OrderItem::getId))
+                .stream()
+                .map(item -> new OrderItemBriefView(
+                        item.getSkuId(),
+                        item.getSkuName(),
+                        item.getQuantity(),
+                        item.getOriginalUnitPrice(),
+                        item.getPayableAmount()))
+                .toList();
+    }
+
+    @Override
+    public Map<Long, Integer> itemCountByOrderIds(Collection<Long> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> distinctIds = orderIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (distinctIds.isEmpty()) {
+            return Map.of();
+        }
+        QueryWrapper<OrderItem> wrapper = new QueryWrapper<>();
+        wrapper.select("order_id", "COALESCE(SUM(quantity), 0) AS item_count")
+                .in("order_id", distinctIds)
+                .groupBy("order_id");
+        Map<Long, Integer> counts = new HashMap<>();
+        for (Map<String, Object> row : orderItemMapper.selectMaps(wrapper)) {
+            long orderId = summaryLong(row, "order_id");
+            if (orderId > 0L) {
+                counts.put(orderId, (int) summaryLong(row, "item_count"));
+            }
+        }
+        return counts;
     }
 
     private Map<Long, Integer> countItems(List<Order> orders) {
