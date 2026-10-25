@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.soloeats.common.api.PageResult;
 import com.soloeats.common.exception.BizException;
 import com.soloeats.common.exception.ErrorCode;
+import com.soloeats.delivery.domain.entity.DeliveryOrder;
+import com.soloeats.delivery.service.DeliveryService;
 import com.soloeats.order.domain.entity.Order;
 import com.soloeats.order.domain.entity.OrderItem;
 import com.soloeats.order.domain.entity.OrderStatusLog;
@@ -26,6 +28,7 @@ import com.soloeats.order.service.view.UserOrderDetailView;
 import com.soloeats.order.service.view.UserOrderItemView;
 import com.soloeats.order.service.view.UserOrderView;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -39,6 +42,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderQueryServiceImpl implements OrderQueryService {
@@ -55,6 +59,7 @@ public class OrderQueryServiceImpl implements OrderQueryService {
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
     private final OrderStatusLogMapper orderStatusLogMapper;
+    private final DeliveryService deliveryService;
 
     @Override
     public PageResult<MerchantOrderView> pageMerchantOrders(MerchantOrderQuery query) {
@@ -138,6 +143,8 @@ public class OrderQueryServiceImpl implements OrderQueryService {
                         .orderByAsc(OrderStatusLog::getCreatedAt)
                         .orderByAsc(OrderStatusLog::getId));
 
+        DeliveryOrder delivery = loadDeliveryQuietly(orderId);
+
         List<UserOrderItemView> itemViews = items.stream()
                 .map(this::toUserItemView)
                 .toList();
@@ -171,6 +178,8 @@ public class OrderQueryServiceImpl implements OrderQueryService {
                 order.getRemark(),
                 order.getRefundStatus(),
                 order.getRefundedAmount(),
+                delivery == null ? null : delivery.getId(),
+                delivery == null ? null : delivery.getStatus(),
                 itemViews,
                 timeline
         );
@@ -218,8 +227,21 @@ public class OrderQueryServiceImpl implements OrderQueryService {
         );
     }
 
+    /**
+     * 配送单是订单详情的附加信息：无单或查询异常都只降级为 null，不影响详情主流程。
+     */
+    private DeliveryOrder loadDeliveryQuietly(Long orderId) {
+        try {
+            return deliveryService.getByOrderId(orderId);
+        } catch (Exception ex) {
+            log.warn("查询配送单失败，订单详情降级为无配送单, orderId={}", orderId, ex);
+            return null;
+        }
+    }
+
     private UserOrderItemView toUserItemView(OrderItem item) {
         return new UserOrderItemView(
+                item.getId(),
                 item.getSkuId(),
                 item.getSkuName(),
                 item.getQuantity(),

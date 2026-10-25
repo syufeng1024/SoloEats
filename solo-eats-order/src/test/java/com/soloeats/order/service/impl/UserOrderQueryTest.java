@@ -8,6 +8,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.soloeats.common.api.PageResult;
 import com.soloeats.common.exception.BizException;
 import com.soloeats.common.exception.ErrorCode;
+import com.soloeats.delivery.domain.entity.DeliveryOrder;
+import com.soloeats.delivery.domain.enums.DeliveryOrderStatus;
+import com.soloeats.delivery.service.DeliveryService;
 import com.soloeats.order.domain.entity.Order;
 import com.soloeats.order.domain.entity.OrderItem;
 import com.soloeats.order.domain.entity.OrderStatusLog;
@@ -16,6 +19,7 @@ import com.soloeats.order.mapper.OrderItemMapper;
 import com.soloeats.order.mapper.OrderMapper;
 import com.soloeats.order.mapper.OrderStatusLogMapper;
 import com.soloeats.order.service.view.UserOrderDetailView;
+import com.soloeats.order.service.view.UserOrderItemView;
 import com.soloeats.order.service.view.UserOrderView;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
@@ -56,6 +60,8 @@ class UserOrderQueryTest {
     private OrderItemMapper orderItemMapper;
     @Mock
     private OrderStatusLogMapper orderStatusLogMapper;
+    @Mock
+    private DeliveryService deliveryService;
 
     @InjectMocks
     private OrderQueryServiceImpl orderQueryService;
@@ -161,6 +167,11 @@ class UserOrderQueryTest {
         assertThat(view.items()).hasSize(2);
         assertThat(view.items().get(0).unitPrice()).isEqualTo(1200L);
         assertThat(view.items().get(0).payableAmount()).isEqualTo(2200L);
+        assertThat(view.items().get(0).orderItemId()).isEqualTo(11L);
+        assertThat(view.items().get(1).orderItemId()).isEqualTo(12L);
+        // 该订单无配送单（mock 返回 null），两个字段均为 null 且不抛异常
+        assertThat(view.deliveryId()).isNull();
+        assertThat(view.deliveryStatus()).isNull();
         assertThat(view.itemCount()).isEqualTo(3);
         assertThat(view.timeline()).hasSize(3);
         assertThat(view.timeline()).extracting(t -> t.createdAt())
@@ -209,6 +220,77 @@ class UserOrderQueryTest {
         assertThat(view.receiverPhoneMask()).isEqualTo("138****8000");
         assertThat(view.receiverPhoneMask()).isNotEqualTo(PLAIN_PHONE);
         assertThat(view.receiverPhoneMask()).doesNotContain(PLAIN_PHONE);
+    }
+
+    @Test
+    @DisplayName("详情：items 暴露 t_order_item.id，供评价接口提交 orderItemId")
+    void detailItemsExposeOrderItemId() {
+        when(orderMapper.selectById(ORDER_ID))
+                .thenReturn(order(ORDER_ID, USER_ID, OrderStatus.COMPLETED.getCode()));
+        when(orderItemMapper.selectList(any())).thenReturn(List.of(
+                item(11L, 1001L, "招牌饭", 2, 1200L, 2400L, 2200L),
+                item(12L, 1002L, "冰红茶", 1, 500L, 500L, 500L)
+        ));
+        when(orderStatusLogMapper.selectList(any())).thenReturn(List.of());
+
+        UserOrderDetailView view = orderQueryService.getUserOrder(USER_ID, ORDER_ID);
+
+        assertThat(view.items()).extracting(UserOrderItemView::orderItemId)
+                .doesNotContainNull()
+                .containsExactly(11L, 12L);
+    }
+
+    @Test
+    @DisplayName("详情：有配送单时回填 deliveryId 与 deliveryStatus")
+    void detailIncludesDeliveryWhenPresent() {
+        when(orderMapper.selectById(ORDER_ID))
+                .thenReturn(order(ORDER_ID, USER_ID, OrderStatus.DELIVERING.getCode()));
+        when(orderItemMapper.selectList(any())).thenReturn(List.of());
+        when(orderStatusLogMapper.selectList(any())).thenReturn(List.of());
+        DeliveryOrder delivery = new DeliveryOrder();
+        delivery.setId(88001L);
+        delivery.setOrderId(ORDER_ID);
+        delivery.setStatus(DeliveryOrderStatus.DELIVERING.getCode());
+        when(deliveryService.getByOrderId(ORDER_ID)).thenReturn(delivery);
+
+        UserOrderDetailView view = orderQueryService.getUserOrder(USER_ID, ORDER_ID);
+
+        assertThat(view.deliveryId()).isEqualTo(88001L);
+        assertThat(view.deliveryStatus()).isEqualTo(40);
+    }
+
+    @Test
+    @DisplayName("详情：无配送单（查询返回 null）时两个字段为 null，不抛异常")
+    void detailWithoutDeliveryLeavesFieldsNull() {
+        when(orderMapper.selectById(ORDER_ID))
+                .thenReturn(order(ORDER_ID, USER_ID, OrderStatus.WAIT_PAY.getCode()));
+        when(orderItemMapper.selectList(any())).thenReturn(List.of());
+        when(orderStatusLogMapper.selectList(any())).thenReturn(List.of());
+        when(deliveryService.getByOrderId(ORDER_ID)).thenReturn(null);
+
+        UserOrderDetailView view = orderQueryService.getUserOrder(USER_ID, ORDER_ID);
+
+        assertThat(view.orderId()).isEqualTo(ORDER_ID);
+        assertThat(view.deliveryId()).isNull();
+        assertThat(view.deliveryStatus()).isNull();
+    }
+
+    @Test
+    @DisplayName("详情：配送单查询异常降级为 null，详情接口仍正常返回")
+    void detailDegradesWhenDeliveryLookupFails() {
+        when(orderMapper.selectById(ORDER_ID))
+                .thenReturn(order(ORDER_ID, USER_ID, OrderStatus.DELIVERING.getCode()));
+        when(orderItemMapper.selectList(any())).thenReturn(List.of());
+        when(orderStatusLogMapper.selectList(any())).thenReturn(List.of());
+        when(deliveryService.getByOrderId(ORDER_ID))
+                .thenThrow(new IllegalStateException("delivery db down"));
+
+        UserOrderDetailView view = orderQueryService.getUserOrder(USER_ID, ORDER_ID);
+
+        assertThat(view.orderId()).isEqualTo(ORDER_ID);
+        assertThat(view.statusName()).isEqualTo("配送中");
+        assertThat(view.deliveryId()).isNull();
+        assertThat(view.deliveryStatus()).isNull();
     }
 
     @SuppressWarnings("unchecked")

@@ -27,6 +27,10 @@ public record UserOrderDetailView(
         String remark,
         Integer refundStatus,
         Long refundedAmount,
+        /** 该订单对应配送单 id（t_delivery_order.id），无配送单为 null。 */
+        Long deliveryId,
+        /** 配送单状态：0 待派单 / 10 已派单 / 20 已接单 / 30 已取货 / 40 配送中 / 50 已送达 / 70 已取消 / 71 已改派；无配送单为 null。 */
+        Integer deliveryStatus,
         List<UserOrderItemView> items,
         List<OrderTimelineView> timeline
 ) {
