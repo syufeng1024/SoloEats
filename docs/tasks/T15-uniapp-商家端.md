@@ -161,4 +161,4 @@ cd solo-eats-uniapp-merchant && npm ci && npm run build:h5
 
 | 日期 | 会话范围 | 新增文件 | 构建结果 | 遗留问题 |
 |---|---|---|---|---|
-| _待填_ | | | | |
+| 2026-10-25 | 阶段A：8 页 + api/stores/utils 基础设施 | 19 新建 / 6 修改 / 2 删除（`src/api/user.ts`、`pay.ts` 为用户端语义，已删除） | `npm run build:h5` 通过；`pages.json` 注册 8 页 + 3 tab 全部存在（missing=0）；Playwright 拦截商家接口后跑通登录→工作台→订单列表/详情→接单/拒单→小票预览→自取核销→商品改库存/批量估清→门店设置保存 | 1) `GET /merchant/report/dashboard` 不接收 shopId，统计固定按令牌内门店，多门店切换后与列表口径不一致（前端已提示）；2) 后端未实现 `X-Shop-Id` 解析，切换到非令牌绑定门店的读写接口会 10004；3) 扫码核销未做，阶段A 仅手动输码（4~8 位）；4) 本机库缺 `t_merchant` 种子，merchant001 登录后 `GET /merchant/shops` 返回「商家不存在」，真实链路需补种子；5) 阶段B 财务/评价/我的未做 |

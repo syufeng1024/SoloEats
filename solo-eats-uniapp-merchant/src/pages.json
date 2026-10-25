@@ -1,0 +1,81 @@
+{
+  "pages": [
+    {
+      "path": "pages/login/Login",
+      "style": {
+        "navigationBarTitleText": "商家登录"
+      }
+    },
+    {
+      "path": "pages/home/Home",
+      "style": {
+        "navigationBarTitleText": "工作台",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/order/List",
+      "style": {
+        "navigationBarTitleText": "订单",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/product/List",
+      "style": {
+        "navigationBarTitleText": "商品",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/order/Detail",
+      "style": {
+        "navigationBarTitleText": "订单详情"
+      }
+    },
+    {
+      "path": "pages/order/Receipt",
+      "style": {
+        "navigationBarTitleText": "小票预览"
+      }
+    },
+    {
+      "path": "pages/pickup/Verify",
+      "style": {
+        "navigationBarTitleText": "自取核销"
+      }
+    },
+    {
+      "path": "pages/shop/ShopSetting",
+      "style": {
+        "navigationBarTitleText": "门店设置"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "数创星光外卖商家端",
+    "navigationBarBackgroundColor": "#16233A",
+    "backgroundColor": "#F2F4F7"
+  },
+  "tabBar": {
+    "color": "#7A8699",
+    "selectedColor": "#FF7A00",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/home/Home",
+        "text": "工作台"
+      },
+      {
+        "pagePath": "pages/order/List",
+        "text": "订单"
+      },
+      {
+        "pagePath": "pages/product/List",
+        "text": "商品"
+      }
+    ]
+  }
+}
