@@ -4,6 +4,8 @@ import com.soloeats.common.api.PageResult;
 import com.soloeats.order.service.query.AdminOrderQuery;
 import com.soloeats.order.service.query.MerchantOrderQuery;
 import com.soloeats.order.service.view.AdminOrderMonitorResult;
+import com.soloeats.order.service.view.MerchantDashboardView;
+import com.soloeats.order.service.view.MerchantOrderDetailView;
 import com.soloeats.order.service.view.MerchantOrderView;
 import com.soloeats.order.service.view.OrderItemBriefView;
 import com.soloeats.order.service.view.UserOrderDetailView;
@@ -39,6 +41,18 @@ public interface OrderQueryService {
      * C 端订单详情：订单不存在抛 ORDER_NOT_FOUND，归属不符抛 AUTH_FORBIDDEN。
      */
     UserOrderDetailView getUserOrder(Long userId, Long orderId);
+
+    /**
+     * 商家端订单详情：订单不存在抛 ORDER_NOT_FOUND。
+     * 商家归属校验由 app 层 PermissionGuard#assertMerchantOrder 完成。
+     */
+    MerchantOrderDetailView getMerchantOrder(Long orderId);
+
+    /**
+     * 商家工作台计数：一条条件聚合 SQL 返回 5 个指标。
+     * shopId 为空时不限门店，非空时收窄到该门店。
+     */
+    MerchantDashboardView dashboard(Long merchantId, Long shopId);
 
     /**
      * 按订单查商品明细，供骑手任务详情使用。

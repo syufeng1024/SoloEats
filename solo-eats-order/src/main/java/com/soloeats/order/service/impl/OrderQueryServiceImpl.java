@@ -21,6 +21,8 @@ import com.soloeats.order.service.query.MerchantOrderQuery;
 import com.soloeats.order.service.view.AdminOrderMonitorResult;
 import com.soloeats.order.service.view.AdminOrderSummary;
 import com.soloeats.order.service.view.AdminOrderView;
+import com.soloeats.order.service.view.MerchantDashboardView;
+import com.soloeats.order.service.view.MerchantOrderDetailView;
 import com.soloeats.order.service.view.MerchantOrderItemView;
 import com.soloeats.order.service.view.MerchantOrderView;
 import com.soloeats.order.service.view.OrderItemBriefView;
@@ -184,6 +186,77 @@ public class OrderQueryServiceImpl implements OrderQueryService {
                 delivery == null ? null : delivery.getStatus(),
                 itemViews,
                 timeline
+        );
+    }
+
+    @Override
+    public MerchantOrderDetailView getMerchantOrder(Long orderId) {
+        if (orderId == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "orderId 不能为空");
+        }
+        Order order = orderMapper.selectById(orderId);
+        if (order == null) {
+            throw new BizException(ErrorCode.ORDER_NOT_FOUND);
+        }
+
+        List<OrderItem> items = orderItemMapper.selectList(new LambdaQueryWrapper<OrderItem>()
+                .eq(OrderItem::getOrderId, orderId)
+                .orderByAsc(OrderItem::getId));
+        List<OrderStatusLog> logs = orderStatusLogMapper.selectList(
+                new LambdaQueryWrapper<OrderStatusLog>()
+                        .eq(OrderStatusLog::getOrderId, orderId)
+                        .orderByAsc(OrderStatusLog::getCreatedAt)
+                        .orderByAsc(OrderStatusLog::getId));
+
+        List<UserOrderItemView> itemViews = items.stream()
+                .map(this::toUserItemView)
+                .toList();
+        List<OrderTimelineView> timeline = logs.stream()
+                .map(this::toTimelineView)
+                .toList();
+
+        return new MerchantOrderDetailView(
+                order.getId(),
+                order.getOrderNo(),
+                order.getShopId(),
+                order.getStatus(),
+                statusName(order.getStatus()),
+                order.getFulfillmentType(),
+                fulfillmentTypeName(order.getFulfillmentType()),
+                order.getGoodsAmount(),
+                order.getPackagingFee(),
+                order.getDeliveryFee(),
+                order.getPayAmount(),
+                order.getReceiverName(),
+                maskPhone(order.getReceiverPhone()),
+                order.getReceiverAddress(),
+                order.getRemark(),
+                order.getPickupCode(),
+                order.getPickupReadyAt(),
+                order.getCreatedAt(),
+                // t_order 无 paid_at 列，按约定返回 null，不新增列
+                null,
+                itemViews,
+                timeline
+        );
+    }
+
+    @Override
+    public MerchantDashboardView dashboard(Long merchantId, Long shopId) {
+        if (merchantId == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "merchantId 不能为空");
+        }
+        LocalDateTime dayStart = LocalDate.now().atStartOfDay();
+        Map<String, Object> row = orderMapper.selectMerchantDashboard(merchantId, shopId, dayStart);
+        if (row == null) {
+            row = Map.of();
+        }
+        return new MerchantDashboardView(
+                summaryLong(row, "today_order_count"),
+                summaryLong(row, "pending_accept_count"),
+                summaryLong(row, "preparing_count"),
+                summaryLong(row, "wait_pickup_count"),
+                summaryLong(row, "completed_today_count")
         );
     }
 
