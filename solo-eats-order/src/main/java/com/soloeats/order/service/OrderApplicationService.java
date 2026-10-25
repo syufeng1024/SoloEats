@@ -5,6 +5,8 @@ import com.soloeats.common.exception.ErrorCode;
 import com.soloeats.common.idempotency.Idempotent;
 import com.soloeats.marketing.service.CouponLockResult;
 import com.soloeats.marketing.service.CouponService;
+import com.soloeats.member.service.MemberAddressService;
+import com.soloeats.member.service.view.OrderAddressView;
 import com.soloeats.order.domain.entity.Order;
 import com.soloeats.order.domain.entity.OrderDiscount;
 import com.soloeats.order.domain.entity.OrderItem;
@@ -26,6 +28,7 @@ import com.soloeats.product.domain.entity.Sku;
 import com.soloeats.product.service.SkuService;
 import com.soloeats.product.service.StockService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +51,7 @@ import java.util.stream.Collectors;
  * 订单应用服务。
  * 下单链路的本地事务边界：订单、明细、优惠快照、库存锁定、库存流水、状态流水。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderApplicationService {
@@ -60,12 +64,15 @@ public class OrderApplicationService {
     private final SkuService skuService;
     private final StockService stockService;
     private final CouponService couponService;
+    private final MemberAddressService memberAddressService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Idempotent(ttlSeconds = 86400)
     @Transactional(rollbackFor = Exception.class)
     public CreateOrderResult createOrder(CreateOrderCommand command, String idempotencyKey) {
         validate(command);
+        ReceiverInfo receiver = resolveReceiver(command);
+        validateReceiver(command, receiver);
 
         long packagingFee = Math.max(0L, Objects.requireNonNullElse(command.packagingFee(), 0L));
         long deliveryFee = command.fulfillmentType() == 2
@@ -109,9 +116,12 @@ public class OrderApplicationService {
         order.setMerchantDiscount(0L);
         order.setPayAmount(goodsAmount + packagingFee + deliveryFee);
         order.setRefundedAmount(0L);
-        order.setReceiverName(command.receiverName());
-        order.setReceiverPhone(command.receiverPhone());
-        order.setReceiverAddress(command.receiverAddress());
+        order.setAddressId(receiver.addressId());
+        order.setReceiverName(receiver.receiverName());
+        order.setReceiverPhone(receiver.receiverPhone());
+        order.setReceiverAddress(receiver.receiverAddress());
+        order.setReceiverLng(receiver.lng());
+        order.setReceiverLat(receiver.lat());
         order.setPickupPhone(command.pickupPhone());
         order.setRemark(command.remark());
         order.setVersion(0);
@@ -267,10 +277,46 @@ public class OrderApplicationService {
         if (command.deliveryFee() != null && command.deliveryFee() < 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "deliveryFee 不能为负数");
         }
-        if (command.fulfillmentType() == 1) {
-            if (!StringUtils.hasText(command.receiverName())
-                    || !StringUtils.hasText(command.receiverPhone())
-                    || !StringUtils.hasText(command.receiverAddress())) {
+    }
+
+    /**
+     * 收货信息解析：addressId 优先（归属校验与解密都在 member 模块内，越权抛 10004），
+     * 未传地址簿时使用请求里的文本与坐标。坐标必须成对，只有一边按缺失处理并告警。
+     */
+    private ReceiverInfo resolveReceiver(CreateOrderCommand command) {
+        Long addressId = command.addressId();
+        String receiverName = command.receiverName();
+        String receiverPhone = command.receiverPhone();
+        String receiverAddress = command.receiverAddress();
+        BigDecimal lng = command.receiverLng();
+        BigDecimal lat = command.receiverLat();
+
+        if (addressId != null) {
+            OrderAddressView address = memberAddressService.resolveForOrder(
+                    command.userId(), addressId);
+            receiverName = address.receiverName();
+            receiverPhone = address.receiverPhone();
+            receiverAddress = address.address();
+            lng = address.lng() != null ? address.lng() : lng;
+            lat = address.lat() != null ? address.lat() : lat;
+        }
+
+        if (lng == null || lat == null) {
+            lng = null;
+            lat = null;
+            if (Objects.equals(command.fulfillmentType(), FulfillmentType.DELIVERY.getCode())) {
+                log.warn("订单无收货坐标，配送将无法按距离调度 userId={} shopId={} addressId={}",
+                        command.userId(), command.shopId(), addressId);
+            }
+        }
+        return new ReceiverInfo(addressId, receiverName, receiverPhone, receiverAddress, lng, lat);
+    }
+
+    private void validateReceiver(CreateOrderCommand command, ReceiverInfo receiver) {
+        if (Objects.equals(command.fulfillmentType(), FulfillmentType.DELIVERY.getCode())) {
+            if (!StringUtils.hasText(receiver.receiverName())
+                    || !StringUtils.hasText(receiver.receiverPhone())
+                    || !StringUtils.hasText(receiver.receiverAddress())) {
                 throw new BizException(ErrorCode.PARAM_INVALID, "配送单必须填写收货人、手机号和地址");
             }
         } else if (!StringUtils.hasText(command.pickupPhone())) {
@@ -326,5 +372,15 @@ public class OrderApplicationService {
     }
 
     private record ItemDraft(Sku sku, int quantity, long originalAmount) {
+    }
+
+    private record ReceiverInfo(
+            Long addressId,
+            String receiverName,
+            String receiverPhone,
+            String receiverAddress,
+            BigDecimal lng,
+            BigDecimal lat
+    ) {
     }
 }

@@ -64,7 +64,6 @@ public class DeliveryFulfillmentApplicationService {
             deliveryService.createForOrder(
                     orderId,
                     order.getShopId(),
-                    "shop-" + order.getShopId(),
                     order.getReceiverAddress(),
                     order.getReceiverLng(),
                     order.getReceiverLat(),

@@ -31,6 +31,11 @@
             <groupId>com.soloeats</groupId>
             <artifactId>solo-eats-delivery</artifactId>
         </dependency>
+        <!-- 下单按 addressId 读取收货地址快照（归属校验在 member 模块内完成） -->
+        <dependency>
+            <groupId>com.soloeats</groupId>
+            <artifactId>solo-eats-member</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>

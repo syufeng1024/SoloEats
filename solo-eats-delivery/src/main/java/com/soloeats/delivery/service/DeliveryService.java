@@ -13,10 +13,10 @@ public interface DeliveryService {
 
     /**
      * 支付成功后为平台配送订单创建配送单，状态 0 待派单。
+     * 取货地址与坐标按 shopId 从 t_shop 读取；双方坐标齐全时同时写入 distance_m。
      */
-    void createForOrder(Long orderId, Long shopId, String pickupAddress,
-                        String receiverAddress, BigDecimal receiverLng,
-                        BigDecimal receiverLat, Long deliveryFee);
+    void createForOrder(Long orderId, Long shopId, String receiverAddress,
+                        BigDecimal receiverLng, BigDecimal receiverLat, Long deliveryFee);
 
     /**
      * 商家呼叫骑手：配送单 0/10/71 -> 10，写入派单次数与派单过期时间。

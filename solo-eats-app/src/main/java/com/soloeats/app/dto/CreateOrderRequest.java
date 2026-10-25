@@ -1,11 +1,14 @@
 package com.soloeats.app.dto;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 public record CreateOrderRequest(
@@ -36,6 +39,17 @@ public record CreateOrderRequest(
         String receiverPhone,
 
         String receiverAddress,
+
+        /** 收货地址簿 ID；非空时以地址簿内容覆盖收货人、手机号、地址与坐标。 */
+        Long addressId,
+
+        @DecimalMin(value = "-180.0", message = "经度取值范围 -180 ~ 180")
+        @DecimalMax(value = "180.0", message = "经度取值范围 -180 ~ 180")
+        BigDecimal receiverLng,
+
+        @DecimalMin(value = "-90.0", message = "纬度取值范围 -90 ~ 90")
+        @DecimalMax(value = "90.0", message = "纬度取值范围 -90 ~ 90")
+        BigDecimal receiverLat,
 
         String pickupPhone,
 

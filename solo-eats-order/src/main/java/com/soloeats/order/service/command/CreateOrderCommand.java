@@ -1,5 +1,6 @@
 package com.soloeats.order.service.command;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -16,6 +17,9 @@ public record CreateOrderCommand(
         String receiverName,
         String receiverPhone,
         String receiverAddress,
+        Long addressId,
+        BigDecimal receiverLng,
+        BigDecimal receiverLat,
         String pickupPhone,
         String remark,
         List<ItemCommand> items

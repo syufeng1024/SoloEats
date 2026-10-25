@@ -7,6 +7,7 @@ import com.soloeats.app.dto.ReportAnomalyRequest;
 import com.soloeats.app.dto.ReportTrackRequest;
 import com.soloeats.app.dto.SubmitCertificationRequest;
 import com.soloeats.app.security.CurrentReceiver;
+import com.soloeats.app.service.RiderDeliveryFacade;
 import com.soloeats.app.vo.RiderTaskDetailView;
 import com.soloeats.app.vo.RiderTaskView;
 import com.soloeats.common.api.ApiResponse;
@@ -61,6 +62,7 @@ public class RiderDispatchController {
     private final RiderOnlineService riderOnlineService;
     private final RiderDispatchService riderDispatchService;
     private final RiderFulfillmentService riderFulfillmentService;
+    private final RiderDeliveryFacade riderDeliveryFacade;
     private final DeliveryTrackService deliveryTrackService;
     private final RiderDeliveryQueryService riderDeliveryQueryService;
     private final OrderQueryService orderQueryService;
@@ -170,7 +172,7 @@ public class RiderDispatchController {
 
     @PostMapping("/deliveries/{id}/pickup")
     public ApiResponse<DeliveryActionView> pickup(@PathVariable("id") Long deliveryId) {
-        return ApiResponse.ok(riderFulfillmentService.pickup(deliveryId, currentRiderId()));
+        return ApiResponse.ok(riderDeliveryFacade.pickup(deliveryId, currentRiderId()));
     }
 
     @PostMapping("/deliveries/{id}/delivered")
@@ -178,7 +180,7 @@ public class RiderDispatchController {
             @PathVariable("id") Long deliveryId,
             @RequestBody(required = false) DeliverRequest request) {
         DeliverRequest body = request == null ? new DeliverRequest(null, null, null) : request;
-        return ApiResponse.ok(riderFulfillmentService.deliver(
+        return ApiResponse.ok(riderDeliveryFacade.delivered(
                 deliveryId, currentRiderId(), body.lng(), body.lat(), body.photoFileId()));
     }
 

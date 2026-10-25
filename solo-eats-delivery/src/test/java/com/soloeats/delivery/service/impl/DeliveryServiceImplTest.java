@@ -7,6 +7,8 @@ import com.soloeats.delivery.domain.entity.RiderIncome;
 import com.soloeats.delivery.domain.enums.DeliveryOrderStatus;
 import com.soloeats.delivery.mapper.DeliveryOrderMapper;
 import com.soloeats.delivery.mapper.RiderIncomeMapper;
+import com.soloeats.store.service.ShopService;
+import com.soloeats.store.service.view.ShopDetailView;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,7 +19,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -37,6 +41,8 @@ class DeliveryServiceImplTest {
     private DeliveryOrderMapper deliveryOrderMapper;
     @Mock
     private RiderIncomeMapper riderIncomeMapper;
+    @Mock
+    private ShopService shopService;
 
     @InjectMocks
     private DeliveryServiceImpl deliveryService;
@@ -110,11 +116,12 @@ class DeliveryServiceImplTest {
     }
 
     @Test
-    @DisplayName("首次取餐完成时生成配送单，配送费为空按 0 处理")
+    @DisplayName("创建配送单：取货信息来自真实门店，缺收货坐标时距离为空")
     void createDeliveryForOrder() {
         when(deliveryOrderMapper.findByOrderId(ORDER_ID)).thenReturn(null);
+        when(shopService.detail(1L)).thenReturn(shop());
 
-        deliveryService.createForOrder(ORDER_ID, 1L, "shop-1", "幸福路 1 号", null, null, null);
+        deliveryService.createForOrder(ORDER_ID, 1L, "幸福路 1 号", null, null, null);
 
         ArgumentCaptor<DeliveryOrder> captor = ArgumentCaptor.forClass(DeliveryOrder.class);
         verify(deliveryOrderMapper).insert(captor.capture());
@@ -122,8 +129,33 @@ class DeliveryServiceImplTest {
         assertThat(saved.getDeliveryNo()).startsWith("DL");
         assertThat(saved.getOrderId()).isEqualTo(ORDER_ID);
         assertThat(saved.getStatus()).isEqualTo(DeliveryOrderStatus.WAIT_ASSIGN.getCode());
+        assertThat(saved.getPickupAddress()).isEqualTo("望京示范店");
+        assertThat(saved.getPickupLng()).isEqualByComparingTo(new BigDecimal("116.490000"));
+        assertThat(saved.getPickupLat()).isEqualByComparingTo(new BigDecimal("39.990000"));
+        assertThat(saved.getReceiverLng()).isNull();
+        assertThat(saved.getReceiverLat()).isNull();
+        assertThat(saved.getDistanceM()).isNull();
         assertThat(saved.getDeliveryFee()).isZero();
         assertThat(saved.getDispatchCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("创建配送单：双方坐标齐全时写入 distance_m")
+    void createDeliveryCalculatesDistance() {
+        when(deliveryOrderMapper.findByOrderId(ORDER_ID)).thenReturn(null);
+        when(shopService.detail(1L)).thenReturn(shop());
+
+        deliveryService.createForOrder(ORDER_ID, 1L, "幸福路 1 号",
+                new BigDecimal("116.500000"), new BigDecimal("40.000000"), 500L);
+
+        ArgumentCaptor<DeliveryOrder> captor = ArgumentCaptor.forClass(DeliveryOrder.class);
+        verify(deliveryOrderMapper).insert(captor.capture());
+        DeliveryOrder saved = captor.getValue();
+        assertThat(saved.getPickupLng()).isNotNull();
+        assertThat(saved.getPickupLat()).isNotNull();
+        assertThat(saved.getReceiverLng()).isEqualByComparingTo(new BigDecimal("116.500000"));
+        assertThat(saved.getReceiverLat()).isEqualByComparingTo(new BigDecimal("40.000000"));
+        assertThat(saved.getDistanceM()).isNotNull().isGreaterThan(0);
     }
 
     @Test
@@ -131,9 +163,21 @@ class DeliveryServiceImplTest {
     void createDeliveryIsIdempotent() {
         when(deliveryOrderMapper.findByOrderId(ORDER_ID)).thenReturn(delivery(DeliveryOrderStatus.ACCEPTED));
 
-        deliveryService.createForOrder(ORDER_ID, 1L, "shop-1", "幸福路 1 号", null, null, 500L);
+        deliveryService.createForOrder(ORDER_ID, 1L, "幸福路 1 号", null, null, 500L);
 
         verify(deliveryOrderMapper, never()).insert(any(DeliveryOrder.class));
+    }
+
+    private ShopDetailView shop() {
+        return new ShopDetailView(
+                1L, 1L, "S001", "望京示范店", null, null,
+                "北京市", "北京市", "朝阳区", "望京SOHO T1",
+                new BigDecimal("116.490000"), new BigDecimal("39.990000"),
+                null, null, null, null, List.of(), null,
+                1, "营业中", 3, 0L, 500L, 100L, 15, 3000,
+                null, null, null, null, 0, 1,
+                15, 120, "A", 6, 30, 0L, null,
+                List.of(), null, null);
     }
 
     @Test

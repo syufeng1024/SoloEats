@@ -8,6 +8,9 @@ import com.soloeats.delivery.domain.enums.DeliveryOrderStatus;
 import com.soloeats.delivery.mapper.DeliveryOrderMapper;
 import com.soloeats.delivery.mapper.RiderIncomeMapper;
 import com.soloeats.delivery.service.DeliveryService;
+import com.soloeats.store.service.ShopService;
+import com.soloeats.store.service.view.ShopDetailView;
+import com.soloeats.store.support.GeoUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -26,6 +29,7 @@ public class DeliveryServiceImpl implements DeliveryService {
 
     private final DeliveryOrderMapper deliveryOrderMapper;
     private final RiderIncomeMapper riderIncomeMapper;
+    private final ShopService shopService;
 
     @Value("${app.dispatch.expire-seconds:15}")
     private int dispatchExpireSeconds;
@@ -86,24 +90,38 @@ public class DeliveryServiceImpl implements DeliveryService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void createForOrder(Long orderId, Long shopId, String pickupAddress,
-                               String receiverAddress, BigDecimal receiverLng,
-                               BigDecimal receiverLat, Long deliveryFee) {
+    public void createForOrder(Long orderId, Long shopId, String receiverAddress,
+                               BigDecimal receiverLng, BigDecimal receiverLat, Long deliveryFee) {
         if (deliveryOrderMapper.findByOrderId(orderId) != null) {
             return;
         }
+        ShopDetailView shop = shopService.detail(shopId);
+
         DeliveryOrder delivery = new DeliveryOrder();
         delivery.setDeliveryNo(generateDeliveryNo());
         delivery.setOrderId(orderId);
         delivery.setShopId(shopId);
         delivery.setStatus(DeliveryOrderStatus.WAIT_ASSIGN.getCode());
-        delivery.setPickupAddress(pickupAddress);
+        delivery.setPickupAddress(shop.shopName());
+        delivery.setPickupLng(shop.lng());
+        delivery.setPickupLat(shop.lat());
         delivery.setReceiverAddress(receiverAddress);
         delivery.setReceiverLng(receiverLng);
         delivery.setReceiverLat(receiverLat);
+        delivery.setDistanceM(distanceMeters(shop.lng(), shop.lat(), receiverLng, receiverLat));
         delivery.setDeliveryFee(deliveryFee == null ? 0L : deliveryFee);
         delivery.setDispatchCount(0);
         deliveryOrderMapper.insert(delivery);
+    }
+
+    /** 双方坐标齐全才计算距离；任一缺失返回 null，不阻塞配送单创建。 */
+    private Integer distanceMeters(BigDecimal pickupLng, BigDecimal pickupLat,
+                                   BigDecimal receiverLng, BigDecimal receiverLat) {
+        if (pickupLng == null || pickupLat == null || receiverLng == null || receiverLat == null) {
+            return null;
+        }
+        return (int) Math.round(GeoUtils.distanceMeters(
+                pickupLng, pickupLat, receiverLng, receiverLat));
     }
 
     @Override

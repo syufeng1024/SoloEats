@@ -70,6 +70,9 @@ public class OrderController {
                 request.receiverName(),
                 request.receiverPhone(),
                 request.receiverAddress(),
+                request.addressId(),
+                request.receiverLng(),
+                request.receiverLat(),
                 request.pickupPhone(),
                 request.remark(),
                 request.items().stream()

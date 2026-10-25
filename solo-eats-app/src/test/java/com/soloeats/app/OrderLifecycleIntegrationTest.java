@@ -354,6 +354,9 @@ class OrderLifecycleIntegrationTest {
                 "13800000000",
                 "幸福路 1 号",
                 null,
+                null,
+                null,
+                null,
                 "少放辣",
                 List.of(new CreateOrderCommand.ItemCommand(SKU_ID, 2))
         );
@@ -369,6 +372,9 @@ class OrderLifecycleIntegrationTest {
                 null,
                 100L,
                 300L,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,

@@ -9,6 +9,7 @@ import com.soloeats.member.mapper.MemberAddressMapper;
 import com.soloeats.member.service.MemberAddressService;
 import com.soloeats.member.service.command.SaveAddressCommand;
 import com.soloeats.member.service.view.AddressView;
+import com.soloeats.member.service.view.OrderAddressView;
 import com.soloeats.member.support.PhoneCipher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -150,6 +151,39 @@ public class MemberAddressServiceImpl implements MemberAddressService {
             throw new BizException(ErrorCode.AUTH_FORBIDDEN);
         }
         log.info("member address set default userId={} addressId={}", userId, id);
+    }
+
+    @Override
+    public OrderAddressView resolveForOrder(Long userId, Long id) {
+        MemberAddress address = requireOwned(userId, id);
+        return new OrderAddressView(
+                address.getId(),
+                address.getReceiverName(),
+                phoneCipher.decrypt(address.getReceiverPhoneCipher()),
+                fullAddress(address),
+                address.getLng(),
+                address.getLat());
+    }
+
+    /** 省市区 + 详细地址 + 门牌号拼成配送地址，空段跳过。 */
+    private static String fullAddress(MemberAddress address) {
+        StringBuilder builder = new StringBuilder();
+        for (String part : List.of(
+                Objects.requireNonNullElse(address.getProvince(), ""),
+                Objects.requireNonNullElse(address.getCity(), ""),
+                Objects.requireNonNullElse(address.getDistrict(), ""),
+                Objects.requireNonNullElse(address.getAddress(), ""))) {
+            if (!part.isBlank()) {
+                builder.append(part.strip());
+            }
+        }
+        if (address.getHouseNumber() != null && !address.getHouseNumber().isBlank()) {
+            if (!builder.isEmpty()) {
+                builder.append(' ');
+            }
+            builder.append(address.getHouseNumber().strip());
+        }
+        return builder.toString();
     }
 
     /** 删除默认地址后，把剩余最新一条提升为默认；没有剩余地址则不补。 */

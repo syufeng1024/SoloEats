@@ -2,6 +2,7 @@ package com.soloeats.member.service;
 
 import com.soloeats.member.service.command.SaveAddressCommand;
 import com.soloeats.member.service.view.AddressView;
+import com.soloeats.member.service.view.OrderAddressView;
 
 import java.util.List;
 
@@ -24,4 +25,10 @@ public interface MemberAddressService {
 
     /** 设为默认；同事务清除该用户其余默认标记。 */
     void setDefault(Long userId, Long id);
+
+    /**
+     * 下单时读取地址快照：校验归属（非本人抛 10004），手机号在模块内解密后返回。
+     * 仅供 order 模块落订单快照，不得直接透出。
+     */
+    OrderAddressView resolveForOrder(Long userId, Long id);
 }
