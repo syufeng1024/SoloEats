@@ -235,4 +235,4 @@ curl -s -X POST http://localhost:8080/api/v1/c/checkin -H "Authorization: Bearer
 
 | 日期 | 会话范围 | 新增/修改文件 | 编译结果 | 既有测试 | 遗留问题 |
 |---|---|---|---|---|---|
-| _待填_ | | | | | |
+| 2026-10-26 | T12 阶段A-0：平台级单档满减 + 试算/分摊 | 新增 19 个：`V22__marketing_promotion.sql`（库实际到 V21，任务卡 V18 已过时）、3 实体 + 3 Mapper、`PromotionService`/`Impl`、`DiscountApportioner`、`MarketingCalculateCommand`、4 个 view、2 个测试、`MarketingClientController` + 2 个 DTO | `mvn -q -DskipTests package` BUILD SUCCESS | `CouponServiceImplTest` 13/13 通过；marketing 模块 29/29 通过 | 阶梯/折扣/商家满减/秒杀留阶段A；券分摊仍由券/order 模块负责，本接口只返回满减分摊 |
