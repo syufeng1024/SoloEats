@@ -5,6 +5,8 @@ import com.soloeats.order.service.query.AdminOrderQuery;
 import com.soloeats.order.service.query.MerchantOrderQuery;
 import com.soloeats.order.service.view.AdminOrderMonitorResult;
 import com.soloeats.order.service.view.MerchantOrderView;
+import com.soloeats.order.service.view.UserOrderDetailView;
+import com.soloeats.order.service.view.UserOrderView;
 import org.apache.ibatis.annotations.Param;
 
 /**
@@ -21,4 +23,15 @@ public interface OrderQueryService {
      * 供 app 层做 C 端越权检查，避免 delivery 反向依赖 order。
      */
     boolean belongsToUser(@Param("orderId") Long orderId, @Param("userId") Long userId);
+
+    /**
+     * C 端订单列表：只返回 userId 本人的订单，status 非空时精确过滤。
+     * pageNum 默认 1，pageSize 默认 10、上限 50。
+     */
+    PageResult<UserOrderView> pageUserOrders(Long userId, Integer status, int pageNum, int pageSize);
+
+    /**
+     * C 端订单详情：订单不存在抛 ORDER_NOT_FOUND，归属不符抛 AUTH_FORBIDDEN。
+     */
+    UserOrderDetailView getUserOrder(Long userId, Long orderId);
 }

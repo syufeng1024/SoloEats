@@ -11,6 +11,8 @@ import com.soloeats.app.vo.OrderStatusVO;
 import com.soloeats.app.vo.OrderVO;
 import com.soloeats.app.vo.RefundVO;
 import com.soloeats.common.api.ApiResponse;
+import com.soloeats.common.api.PageResult;
+import com.soloeats.common.auth.AuthContext;
 import com.soloeats.common.auth.RequireRole;
 import com.soloeats.common.auth.Roles;
 import com.soloeats.common.ratelimit.RateLimit;
@@ -20,16 +22,21 @@ import com.soloeats.order.domain.enums.OrderEvent;
 import com.soloeats.order.domain.enums.OrderStatus;
 import com.soloeats.order.service.DeliveryFulfillmentApplicationService;
 import com.soloeats.order.service.OrderApplicationService;
+import com.soloeats.order.service.OrderQueryService;
 import com.soloeats.order.service.RefundService;
 import com.soloeats.order.service.RiderDispatchResult;
 import com.soloeats.order.service.command.CreateOrderCommand;
+import com.soloeats.order.service.view.UserOrderDetailView;
+import com.soloeats.order.service.view.UserOrderView;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -41,6 +48,7 @@ public class OrderController {
     private final DeliveryFulfillmentApplicationService deliveryFulfillmentApplicationService;
     private final RefundService refundService;
     private final PermissionGuard permissionGuard;
+    private final OrderQueryService orderQueryService;
 
     @RequireRole(Roles.C_USER)
     @RateLimit(key = "order-create", limit = 20, windowSeconds = 60, dimension = RateLimitDimension.USER)
@@ -188,5 +196,22 @@ public class OrderController {
                         idempotencyKey
                 )
         ));
+    }
+
+    @RequireRole(Roles.C_USER)
+    @GetMapping
+    public ApiResponse<PageResult<UserOrderView>> list(
+            @RequestParam(required = false) Integer status,
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        return ApiResponse.ok(orderQueryService.pageUserOrders(
+                AuthContext.require().userId(), status, pageNum, pageSize));
+    }
+
+    @RequireRole(Roles.C_USER)
+    @GetMapping("/{orderId}")
+    public ApiResponse<UserOrderDetailView> detail(@PathVariable Long orderId) {
+        return ApiResponse.ok(orderQueryService.getUserOrder(
+                AuthContext.require().userId(), orderId));
     }
 }

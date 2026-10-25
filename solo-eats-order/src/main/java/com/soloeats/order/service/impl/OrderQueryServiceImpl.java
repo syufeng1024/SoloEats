@@ -8,9 +8,11 @@ import com.soloeats.common.exception.BizException;
 import com.soloeats.common.exception.ErrorCode;
 import com.soloeats.order.domain.entity.Order;
 import com.soloeats.order.domain.entity.OrderItem;
+import com.soloeats.order.domain.entity.OrderStatusLog;
 import com.soloeats.order.domain.enums.OrderStatus;
 import com.soloeats.order.mapper.OrderItemMapper;
 import com.soloeats.order.mapper.OrderMapper;
+import com.soloeats.order.mapper.OrderStatusLogMapper;
 import com.soloeats.order.service.OrderQueryService;
 import com.soloeats.order.service.query.AdminOrderQuery;
 import com.soloeats.order.service.query.MerchantOrderQuery;
@@ -19,6 +21,10 @@ import com.soloeats.order.service.view.AdminOrderSummary;
 import com.soloeats.order.service.view.AdminOrderView;
 import com.soloeats.order.service.view.MerchantOrderItemView;
 import com.soloeats.order.service.view.MerchantOrderView;
+import com.soloeats.order.service.view.OrderTimelineView;
+import com.soloeats.order.service.view.UserOrderDetailView;
+import com.soloeats.order.service.view.UserOrderItemView;
+import com.soloeats.order.service.view.UserOrderView;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -26,6 +32,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -38,12 +45,16 @@ public class OrderQueryServiceImpl implements OrderQueryService {
 
     private static final long DEFAULT_PAGE_SIZE = 20L;
     private static final long MAX_PAGE_SIZE = 100L;
+    private static final int USER_DEFAULT_PAGE_NUM = 1;
+    private static final int USER_DEFAULT_PAGE_SIZE = 10;
+    private static final int USER_MAX_PAGE_SIZE = 50;
     private static final Set<Integer> VALID_STATUSES = Arrays.stream(OrderStatus.values())
             .map(OrderStatus::getCode)
             .collect(Collectors.toUnmodifiableSet());
 
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
+    private final OrderStatusLogMapper orderStatusLogMapper;
 
     @Override
     public PageResult<MerchantOrderView> pageMerchantOrders(MerchantOrderQuery query) {
@@ -77,6 +88,168 @@ public class OrderQueryServiceImpl implements OrderQueryService {
         // t_order 无逻辑删除列，selectById 查不到即视为不存在（含已删除）
         Order order = orderMapper.selectById(orderId);
         return order != null && Objects.equals(order.getUserId(), userId);
+    }
+
+    @Override
+    public PageResult<UserOrderView> pageUserOrders(Long userId, Integer status,
+                                                    int pageNum, int pageSize) {
+        if (userId == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "userId 不能为空");
+        }
+        validateStatus(status);
+        long normalizedPageNum = normalizeUserPageNum(pageNum);
+        long normalizedPageSize = normalizeUserPageSize(pageSize);
+
+        // t_order 无逻辑删除列，不做 deleted 过滤
+        LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<Order>()
+                .eq(Order::getUserId, userId)
+                .eq(status != null, Order::getStatus, status)
+                .orderByDesc(Order::getCreatedAt)
+                .orderByDesc(Order::getId);
+
+        Page<Order> page = orderMapper.selectPage(
+                new Page<>(normalizedPageNum, normalizedPageSize), wrapper);
+        Map<Long, Integer> itemCounts = countItems(page.getRecords());
+        List<UserOrderView> views = page.getRecords().stream()
+                .map(order -> toUserListView(order, itemCounts.getOrDefault(order.getId(), 0)))
+                .toList();
+        return PageResult.of(views, page.getTotal(), normalizedPageNum, normalizedPageSize);
+    }
+
+    @Override
+    public UserOrderDetailView getUserOrder(Long userId, Long orderId) {
+        if (userId == null || orderId == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "userId 与 orderId 不能为空");
+        }
+        Order order = orderMapper.selectById(orderId);
+        if (order == null) {
+            throw new BizException(ErrorCode.ORDER_NOT_FOUND);
+        }
+        if (!Objects.equals(order.getUserId(), userId)) {
+            throw new BizException(ErrorCode.AUTH_FORBIDDEN);
+        }
+
+        List<OrderItem> items = orderItemMapper.selectList(new LambdaQueryWrapper<OrderItem>()
+                .eq(OrderItem::getOrderId, orderId)
+                .orderByAsc(OrderItem::getId));
+        List<OrderStatusLog> logs = orderStatusLogMapper.selectList(
+                new LambdaQueryWrapper<OrderStatusLog>()
+                        .eq(OrderStatusLog::getOrderId, orderId)
+                        .orderByAsc(OrderStatusLog::getCreatedAt)
+                        .orderByAsc(OrderStatusLog::getId));
+
+        List<UserOrderItemView> itemViews = items.stream()
+                .map(this::toUserItemView)
+                .toList();
+        List<OrderTimelineView> timeline = logs.stream()
+                .map(this::toTimelineView)
+                .toList();
+        int itemCount = items.stream()
+                .map(OrderItem::getQuantity)
+                .filter(Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .sum();
+
+        return new UserOrderDetailView(
+                order.getId(),
+                order.getOrderNo(),
+                order.getShopId(),
+                order.getStatus(),
+                statusName(order.getStatus()),
+                order.getFulfillmentType(),
+                fulfillmentTypeName(order.getFulfillmentType()),
+                order.getGoodsAmount(),
+                order.getPackagingFee(),
+                order.getDeliveryFee(),
+                order.getPayAmount(),
+                itemCount,
+                order.getPickupCode(),
+                order.getCreatedAt(),
+                order.getReceiverName(),
+                maskPhone(order.getReceiverPhone()),
+                order.getReceiverAddress(),
+                order.getRemark(),
+                order.getRefundStatus(),
+                order.getRefundedAmount(),
+                itemViews,
+                timeline
+        );
+    }
+
+    private Map<Long, Integer> countItems(List<Order> orders) {
+        List<Long> orderIds = orders.stream()
+                .map(Order::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        // 批量 SUM，避免逐单查询（N+1）
+        QueryWrapper<OrderItem> wrapper = new QueryWrapper<>();
+        wrapper.select("order_id", "COALESCE(SUM(quantity), 0) AS item_count")
+                .in("order_id", orderIds)
+                .groupBy("order_id");
+        Map<Long, Integer> counts = new HashMap<>();
+        for (Map<String, Object> row : orderItemMapper.selectMaps(wrapper)) {
+            long orderId = summaryLong(row, "order_id");
+            if (orderId > 0L) {
+                counts.put(orderId, (int) summaryLong(row, "item_count"));
+            }
+        }
+        return counts;
+    }
+
+    private UserOrderView toUserListView(Order order, int itemCount) {
+        return new UserOrderView(
+                order.getId(),
+                order.getOrderNo(),
+                order.getShopId(),
+                order.getStatus(),
+                statusName(order.getStatus()),
+                order.getFulfillmentType(),
+                fulfillmentTypeName(order.getFulfillmentType()),
+                order.getGoodsAmount(),
+                order.getPackagingFee(),
+                order.getDeliveryFee(),
+                order.getPayAmount(),
+                itemCount,
+                order.getPickupCode(),
+                order.getCreatedAt()
+        );
+    }
+
+    private UserOrderItemView toUserItemView(OrderItem item) {
+        return new UserOrderItemView(
+                item.getSkuId(),
+                item.getSkuName(),
+                item.getQuantity(),
+                item.getOriginalUnitPrice(),
+                item.getOriginalAmount(),
+                item.getPayableAmount()
+        );
+    }
+
+    private OrderTimelineView toTimelineView(OrderStatusLog log) {
+        return new OrderTimelineView(
+                log.getFromStatus(),
+                statusName(log.getFromStatus()),
+                log.getToStatus(),
+                statusName(log.getToStatus()),
+                log.getEvent(),
+                log.getOperatorType(),
+                log.getCreatedAt()
+        );
+    }
+
+    private String fulfillmentTypeName(Integer type) {
+        if (type == null) {
+            return null;
+        }
+        return switch (type) {
+            case 1 -> "配送";
+            case 2 -> "自取";
+            default -> "未知";
+        };
     }
 
     @Override
@@ -257,6 +430,17 @@ public class OrderQueryServiceImpl implements OrderQueryService {
 
     private long normalizePageNum(long pageNum) {
         return pageNum < 1L ? 1L : pageNum;
+    }
+
+    private long normalizeUserPageNum(int pageNum) {
+        return pageNum < 1 ? USER_DEFAULT_PAGE_NUM : pageNum;
+    }
+
+    private long normalizeUserPageSize(int pageSize) {
+        if (pageSize < 1) {
+            return USER_DEFAULT_PAGE_SIZE;
+        }
+        return Math.min(pageSize, USER_MAX_PAGE_SIZE);
     }
 
     private long normalizePageSize(long pageSize) {
