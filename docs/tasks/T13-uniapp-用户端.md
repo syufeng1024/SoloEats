@@ -189,4 +189,4 @@ cd solo-eats-uniapp-user && npm ci && npm run build:h5
 
 | 日期 | 会话范围 | 新增文件 | 构建结果 | 遗留问题 |
 |---|---|---|---|---|
-| _待填_ | | | | |
+| 2026-10-25 | 阶段A：登录/首页/门店/购物车/确认订单/支付结果/订单列表/订单详情/取餐码/配送追踪/评价共 11 页 + 请求封装与 4 个域 API、auth/cart store、money/request/date 工具 | 新增 23 个源文件（api 6、stores 2、utils 3、pages 12）；改 `pages.json`、`vite.config.js`、`App.vue`；删除脚手架 `pages/index/index.vue` | `npm run build:h5` → `DONE Build complete.`；`dist/build/h5/index.html` 存在；`pages.json` 11 个页面文件全部存在 | ① 后端 `UserOrderItemView` 缺 `orderItemId`，评价接口无法提交（页面已提示缺口）；② `UserOrderDetailView` 缺 `deliveryId`，配送追踪只能显示「暂无配送信息」；③ 地址簿只返回脱敏手机号，配送下单需用户重填完整号码；④ 无「可用支付渠道」与用户端「确认取餐」接口，支付 channel 固定 1、取餐码页只做说明；⑤ 后端 `CreateOrderCommand` 无加料字段，加料不参与计价；⑥ 工程未安装 pinia，两个 store 用 Vue reactive 单例实现等价 API |

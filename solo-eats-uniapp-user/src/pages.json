@@ -1,0 +1,93 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/Index",
+      "style": {
+        "navigationBarTitleText": "数创星光外卖"
+      }
+    },
+    {
+      "path": "pages/login/Login",
+      "style": {
+        "navigationBarTitleText": "登录"
+      }
+    },
+    {
+      "path": "pages/shop/Shop",
+      "style": {
+        "navigationBarTitleText": "门店点餐"
+      }
+    },
+    {
+      "path": "pages/cart/Cart",
+      "style": {
+        "navigationBarTitleText": "购物车"
+      }
+    },
+    {
+      "path": "pages/order/Confirm",
+      "style": {
+        "navigationBarTitleText": "确认订单"
+      }
+    },
+    {
+      "path": "pages/order/PayResult",
+      "style": {
+        "navigationBarTitleText": "支付结果"
+      }
+    },
+    {
+      "path": "pages/order/List",
+      "style": {
+        "navigationBarTitleText": "我的订单",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/order/Detail",
+      "style": {
+        "navigationBarTitleText": "订单详情"
+      }
+    },
+    {
+      "path": "pages/order/PickupCode",
+      "style": {
+        "navigationBarTitleText": "取餐码"
+      }
+    },
+    {
+      "path": "pages/order/Track",
+      "style": {
+        "navigationBarTitleText": "配送追踪"
+      }
+    },
+    {
+      "path": "pages/review/ReviewForm",
+      "style": {
+        "navigationBarTitleText": "评价"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "数创星光外卖",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F5F5F7"
+  },
+  "tabBar": {
+    "color": "#8A8A8A",
+    "selectedColor": "#FF7A00",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/Index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/order/List",
+        "text": "订单"
+      }
+    ]
+  }
+}
