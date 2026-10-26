@@ -60,6 +60,48 @@ const router = createRouter({
           component: () => import('@/views/admin/AdminSettlementsView.vue'),
           meta: { roles: ['ADMIN'], title: '抽成结算' },
         },
+        {
+          path: 'merchant/apply',
+          name: 'admin-merchant-apply',
+          component: () => import('@/views/admin/merchant/ApplyListView.vue'),
+          meta: { roles: ['ADMIN'], title: '商家入驻审核' },
+        },
+        {
+          path: 'merchant/apply/:id',
+          name: 'admin-merchant-apply-audit',
+          component: () => import('@/views/admin/merchant/AuditView.vue'),
+          meta: { roles: ['ADMIN'], title: '商家审核详情' },
+        },
+        {
+          path: 'store/shop',
+          name: 'admin-shop-list',
+          component: () => import('@/views/admin/store/ShopListView.vue'),
+          meta: { roles: ['ADMIN'], title: '门店管理' },
+        },
+        {
+          path: 'store/shop/new',
+          name: 'admin-shop-create',
+          component: () => import('@/views/admin/store/ShopFormView.vue'),
+          meta: { roles: ['ADMIN'], title: '新增门店' },
+        },
+        {
+          path: 'store/shop/:id/edit',
+          name: 'admin-shop-edit',
+          component: () => import('@/views/admin/store/ShopFormView.vue'),
+          meta: { roles: ['ADMIN'], title: '编辑门店' },
+        },
+        {
+          path: 'product/spu',
+          name: 'admin-spu-list',
+          component: () => import('@/views/admin/product/SpuListView.vue'),
+          meta: { roles: ['ADMIN'], title: '商品库' },
+        },
+        {
+          path: 'marketing/coupon',
+          name: 'admin-coupon',
+          component: () => import('@/views/admin/marketing/CouponView.vue'),
+          meta: { roles: ['ADMIN'], title: '券管理' },
+        },
       ],
     },
     {

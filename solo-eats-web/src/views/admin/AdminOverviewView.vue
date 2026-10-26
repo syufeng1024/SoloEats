@@ -3,7 +3,8 @@ import { onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { monitorOrders } from '@/api/admin'
-import type { AdminOrderSummary, AdminOrderView } from '@/api/types'
+import { getDashboard } from '@/api/report'
+import type { AdminOrderSummary, AdminOrderView, DashboardView } from '@/api/types'
 import { ORDER_STATUS_OPTIONS, orderStatusMeta } from '@/constants/orderStatus'
 import { formatDateTime } from '@/utils/datetime'
 import { debounce } from '@/utils/debounce'
@@ -22,8 +23,21 @@ const EMPTY_SUMMARY: AdminOrderSummary = {
   refundedAmount: 0,
 }
 
+const EMPTY_DASHBOARD: DashboardView = {
+  todayGmv: 0,
+  orderCount: 0,
+  avgOrderAmount: 0,
+  onlineRiders: 0,
+  exceptionOrders: 0,
+  newUsers: 0,
+  inProgressOrders: 0,
+}
+
 const loading = ref(false)
 const loadError = ref('')
+const dashboardLoading = ref(false)
+const dashboardError = ref('')
+const dashboard = ref<DashboardView>({ ...EMPTY_DASHBOARD })
 const orders = ref<AdminOrderView[]>([])
 const summary = ref<AdminOrderSummary>({ ...EMPTY_SUMMARY })
 const total = ref(0)
@@ -47,6 +61,22 @@ watch(
     void load()
   }, 300),
 )
+
+async function loadDashboard(): Promise<void> {
+  dashboardLoading.value = true
+  dashboardError.value = ''
+  try {
+    dashboard.value = await getDashboard()
+  } catch (error) {
+    dashboardError.value = error instanceof Error ? error.message : '今日经营数据加载失败'
+  } finally {
+    dashboardLoading.value = false
+  }
+}
+
+async function refreshAll(): Promise<void> {
+  await Promise.all([loadDashboard(), load()])
+}
 
 async function load(): Promise<void> {
   loading.value = true
@@ -105,7 +135,7 @@ function copyOrderNo(orderNo: string): void {
     .catch(() => ElMessage.warning('复制失败，请手动选择'))
 }
 
-onMounted(load)
+onMounted(refreshAll)
 </script>
 
 <template>
@@ -119,10 +149,65 @@ onMounted(load)
           <span class="mono">前 3 位 + **** + 后 4 位</span> 脱敏。
         </p>
       </div>
-      <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
+      <el-button :icon="Refresh" :loading="loading || dashboardLoading" @click="refreshAll">
+        刷新
+      </el-button>
     </div>
 
     <el-alert v-if="loadError" type="error" :closable="false" show-icon :title="loadError" />
+
+    <div class="section-lead">
+      <h3>今日经营</h3>
+      <span class="muted">
+        数据源：<span class="mono">GET /api/v1/admin/report/dashboard</span>，金额单位为分，按元展示。
+      </span>
+    </div>
+
+    <el-alert
+      v-if="dashboardError"
+      type="warning"
+      :closable="false"
+      show-icon
+      :title="dashboardError"
+    />
+
+    <div v-loading="dashboardLoading" class="stat-grid dashboard-grid">
+      <div class="stat-card stat-card-accent">
+        <div class="stat-label">今日 GMV</div>
+        <div class="stat-value">{{ formatYuan(dashboard.todayGmv) }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">今日订单</div>
+        <div class="stat-value">{{ dashboard.orderCount }}<span class="stat-unit">笔</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">客单价</div>
+        <div class="stat-value">{{ formatYuan(dashboard.avgOrderAmount) }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">进行中订单</div>
+        <div class="stat-value">{{ dashboard.inProgressOrders }}<span class="stat-unit">笔</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">异常订单</div>
+        <div class="stat-value" :class="{ 'stat-danger': dashboard.exceptionOrders > 0 }">
+          {{ dashboard.exceptionOrders }}<span class="stat-unit">笔</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">在线骑手</div>
+        <div class="stat-value">{{ dashboard.onlineRiders }}<span class="stat-unit">人</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">今日新增用户</div>
+        <div class="stat-value">{{ dashboard.newUsers }}<span class="stat-unit">人</span></div>
+      </div>
+    </div>
+
+    <div class="section-lead">
+      <h3>订单监控汇总</h3>
+      <span class="muted">随下方筛选条件联动</span>
+    </div>
 
     <div class="stat-grid">
       <div class="stat-card">
@@ -284,6 +369,32 @@ onMounted(load)
 </template>
 
 <style scoped>
+.section-lead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 20px 0 10px;
+}
+
+.section-lead h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dashboard-grid {
+  margin-bottom: 4px;
+}
+
+.stat-card-accent {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+}
+
+.stat-danger {
+  color: var(--el-color-danger);
+}
+
 .filter-bar {
   margin-bottom: 14px;
 }

@@ -10,11 +10,11 @@
 |---|---|
 | 任务卡 | 17 张 |
 | 会话单元（阶段） | 约 36 个 |
-| **已完成单元** | **约 26 个（≈72%）** |
+| **已完成单元** | **约 27 个（≈75%）** |
 | 后端 Maven 模块 | 14 个（P1 的 service / content 两个未建） |
 | 数据库迁移 | Flyway V1~V24，103 张表 |
 | 后端接口 | 63 个 Controller |
-| 前端页面 | Web 后台 6 个业务页 · 用户端 11 页 · 骑手端 8 页 · 商家端 8 页 |
+| 前端页面 | Web 后台 12 个业务页 · 商家中心独立工程 4 页 · 用户端 11 页 · 骑手端 8 页 · 商家端 8 页 |
 
 ---
 
@@ -36,6 +36,7 @@
 | **T15** 商家端 App | A | 登录、订单列表/详情、接单备餐、自取核销、商品与估清、门店设置（8 页） |
 | **T16** 结算 | A | 结算单审核→模拟打款、提现闭环 |
 | **T11** 报表 | A | **阶段A 已交付**：`solo-eats-report` 模块、6 张报表表（阶段A 填充平台/门店日报）、工作台实时卡 `GET /api/v1/admin/report/dashboard`、经营总览 `GET /api/v1/admin/report/overview`（日/周/月）、02:30 日聚合 + 每 5 分钟当日刷新；另保留既有 `GET /api/v1/merchant/report/dashboard` |
+| **T17** 运营后台与商家中心 | 批次0 | **P0 收口**：运营后台新增商家入驻审核、门店管理、商品库列表、基础券管理 4 组 6 页 + 工作台 7 张今日卡；`solo-eats-web/shared/` 共享层抽出；`solo-eats-web-merchant/` 独立商家中心工程（base `/merchant/`，复制 3 个商家视图）。两条 `npm run build` 均通过，单测 10/10 |
 
 **可完整跑通的主链路**：
 
@@ -48,11 +49,11 @@
 
 ## 未交付
 
-### P0 缺口（一处，阻断"P0 全绿"）
+### P0 缺口
 
-| 任务卡 | 缺口 |
-|---|---|
-| **T17 批次0** | Web 后台仍只有 6 个业务页，商家审核 / 门店 / 商品 / 基础券 / 工作台的**配置界面全部未做**；`solo-eats-web-merchant/` 独立商家中心工程未建。任务卡里批次0 定为 P0，理由是规格书 13 章要求「后台每个可配置项必须真实驱动各端效果」，没有界面就无法通过 P0 验收。**后端前置已就绪**：券接口见 T12 阶段A-1（`/api/v1/admin/coupons` 7 端点），工作台与经营总览接口见 T11 阶段A |
+**已清零。** T17 批次0 于 2026-10-27 交付（commit 见 `feat(T17-B0)`），T11 阶段A 于 2026-10-26 交付。P0 范围内已无未交付项。
+
+> 遗留说明：T17 批次0 的页面是"能看见能操作"的最小实现，任务卡执行记录里列了 10 条降级项（如门店表单未含营业时段、入驻列表品类筛选只能填 ID、无按钮级 `v-perm`），这些不阻断 P0 验收，但要进 P1 收口清单。
 
 ### P1 未启动
 
@@ -89,7 +90,8 @@ ls solo-eats-app/src/main/java/com/soloeats/app/controller/*.java | wc -l   # �
 grep -c '"path"' solo-eats-uniapp-user/src/pages.json      # 11（阶段A 目标）
 grep -c '"path"' solo-eats-uniapp-rider/src/pages.json     # 8
 grep -c '"path"' solo-eats-uniapp-merchant/src/pages.json  # 8
-find solo-eats-web/src/views -name '*.vue' | wc -l         # 7（含 NotFound，业务页 6）
+find solo-eats-web/src/views -name '*.vue' | wc -l         # 13（含 NotFound，业务页 12）
+find solo-eats-web-merchant/src/views -name '*.vue' | wc -l # 5（含 NotFound，业务页 4）
 
 # 各卡执行记录有无
 grep -n '执行记录' -A 6 docs/tasks/T05-*.md

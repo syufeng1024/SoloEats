@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { login as loginApi } from '@/api/auth'
 import type { LoginPayload } from '@/api/types'
+import { matchesRole } from '@/constants/roles'
 import {
   clearAuth,
   isAuthExpired,
@@ -43,7 +44,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function hasRole(role: string): boolean {
-    return roles.value.includes(role)
+    return roles.value.some((item) => matchesRole(item, role))
   }
 
   return {

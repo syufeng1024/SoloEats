@@ -1,10 +1,10 @@
-import { ROLES } from '@/constants/roles'
+import { ROLES, hasAnyRole } from '@/constants/roles'
 
 export function homeForRole(roles: string[]): string {
-  if (roles.includes(ROLES.ADMIN)) {
+  if (hasAnyRole(roles, ROLES.ADMIN)) {
     return '/admin/overview'
   }
-  if (roles.includes(ROLES.MERCHANT)) {
+  if (hasAnyRole(roles, ROLES.MERCHANT)) {
     return '/merchant/orders'
   }
   return '/login'
@@ -17,11 +17,15 @@ export function isRedirectAllowed(path: string, roles: string[]): boolean {
   if (!path.startsWith('/') || path.startsWith('//')) {
     return false
   }
+  // 商家入驻审核页挂在 /merchant/apply，但只对平台管理员开放
+  if (path.startsWith('/merchant/apply')) {
+    return hasAnyRole(roles, ROLES.ADMIN)
+  }
   if (path.startsWith('/merchant')) {
-    return roles.includes(ROLES.MERCHANT)
+    return hasAnyRole(roles, ROLES.MERCHANT)
   }
   if (path.startsWith('/admin')) {
-    return roles.includes(ROLES.ADMIN)
+    return hasAnyRole(roles, ROLES.ADMIN)
   }
   return false
 }

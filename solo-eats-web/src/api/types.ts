@@ -258,3 +258,194 @@ export interface SettlementGenerateResult {
   orderCount: number
   billIds: number[]
 }
+
+/** MerchantView.java，金额单位分，commissionRate 为 0~0.5 的比例值 */
+export interface MerchantView {
+  id: number
+  merchantNo: string
+  merchantName: string
+  brandName: string | null
+  categoryId: number | null
+  contactName: string
+  contactPhone: string
+  contactEmail: string | null
+  province: string | null
+  city: string | null
+  district: string | null
+  address: string | null
+  status: number
+  commissionRate: number
+  level: number
+  auditAt: string | null
+  auditRemark: string | null
+  createdAt: string
+}
+
+/** QualificationView.java */
+export interface MerchantQualificationView {
+  id: number
+  qualType: number
+  fileId: number
+  fileUrl: string | null
+  fileName: string | null
+  expireAt: string | null
+  status: number
+  auditRemark: string | null
+  createdAt: string
+}
+
+/** AuditLogView.java */
+export interface MerchantAuditLogView {
+  id: number
+  fromStatus: number
+  toStatus: number
+  action: string
+  operatorId: number | null
+  operatorName: string | null
+  remark: string | null
+  createdAt: string
+}
+
+/** MerchantDetailView.java，legalIdCard 由后端脱敏后返回 */
+export interface MerchantDetailView extends MerchantView {
+  businessLicenseNo: string | null
+  legalPerson: string | null
+  legalIdCard: string | null
+  auditBy: number | null
+  openedAt: string | null
+  remark: string | null
+  updatedAt: string
+  qualifications: MerchantQualificationView[]
+  auditLogs: MerchantAuditLogView[]
+}
+
+/** ShopView.java，金额单位分 */
+export interface ShopView {
+  id: number
+  merchantId: number
+  shopNo: string
+  shopName: string
+  city: string | null
+  district: string | null
+  address: string
+  lng: number
+  lat: number
+  status: number
+  statusText: string
+  deliveryTypes: number
+  minOrderAmount: number
+  deliveryFee: number
+  packagingFee: number
+  prepMinutes: number
+  rating: number
+  monthSales: number
+  pickupEnabled: number
+  createdAt: string
+}
+
+/** ShopDetailView.java */
+export interface ShopBusinessHourView {
+  dayOfWeek: number
+  startTime: string
+  endTime: string
+  crossDay: boolean
+}
+
+export interface ShopDetailView extends ShopView {
+  brandId: number | null
+  categoryId: number | null
+  province: string | null
+  contactName: string | null
+  contactPhone: string | null
+  logoUrl: string | null
+  coverUrl: string | null
+  imageUrls: string[] | null
+  announcement: string | null
+  deliveryRadiusM: number
+  ratingTaste: number
+  ratingPackage: number
+  ratingDelivery: number
+  pickupPrepareMinutes: number
+  pickupTimeoutMinutes: number
+  pickupCodePrefix: string | null
+  pickupCodeLength: number
+  pickupCodeValidMinutes: number
+  pickupDiscount: number
+  settleAccountId: number | null
+  businessHours: ShopBusinessHourView[]
+  updatedAt: string
+}
+
+/** CategoryNode.java */
+export interface CategoryNode {
+  id: number
+  parentId: number | null
+  categoryName: string
+  iconUrl: string | null
+  level: number
+  sort: number
+  status: number
+  children: CategoryNode[] | null
+}
+
+/** SpuView.java，金额单位分 */
+export interface SpuView {
+  id: number
+  merchantId: number | null
+  categoryId: number | null
+  spuName: string
+  subtitle: string | null
+  description: string | null
+  detailHtml: string | null
+  mainImage: string | null
+  images: string[] | null
+  tags: string[] | null
+  packagingFee: number
+  minPurchaseQty: number
+  limitPerOrder: number
+  status: number
+  sortWeight: number
+  monthSales: number
+  updatedAt: string
+}
+
+/** CouponTemplateView.java，金额单位分，discountRate 为 0~1 的比例值 */
+export interface CouponTemplateView {
+  id: number
+  name: string
+  couponType: number
+  thresholdAmount: number
+  discountAmount: number
+  discountRate: number | null
+  bearer: number
+  totalQty: number
+  issuedQty: number
+  validStart: string | null
+  validEnd: string | null
+  validDays: number | null
+  status: number
+  createdAt: string
+}
+
+/** CouponGrantRecordView.java */
+export interface CouponGrantRecordView {
+  id: number
+  userId: number
+  templateId: number
+  status: number
+  expireAt: string
+  usedAt: string | null
+  orderId: number | null
+  createdAt: string
+}
+
+/** DashboardView.java，金额单位分 */
+export interface DashboardView {
+  todayGmv: number
+  orderCount: number
+  avgOrderAmount: number
+  onlineRiders: number
+  exceptionOrders: number
+  newUsers: number
+  inProgressOrders: number
+}

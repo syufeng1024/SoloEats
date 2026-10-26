@@ -1,0 +1,32 @@
+{
+  "base": "/merchant/",
+  "routes": [
+    {
+      "path": "/login",
+      "name": "merchant-login",
+      "title": "商家登录",
+      "layout": "none"
+    },
+    {
+      "path": "/orders",
+      "name": "merchant-orders",
+      "title": "实时订单",
+      "layout": "MerchantLayout",
+      "roles": ["MERCHANT"]
+    },
+    {
+      "path": "/products",
+      "name": "merchant-products",
+      "title": "商品与库存",
+      "layout": "MerchantLayout",
+      "roles": ["MERCHANT"]
+    },
+    {
+      "path": "/settlements",
+      "name": "merchant-settlements",
+      "title": "财务对账",
+      "layout": "MerchantLayout",
+      "roles": ["MERCHANT"]
+    }
+  ]
+}

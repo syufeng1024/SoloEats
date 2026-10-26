@@ -1,0 +1,136 @@
+/* 商家中心：深青绿主题；浅色内容区 + 深色侧边栏（规格书 4.13） */
+:root {
+  --el-color-primary: #0f766e;
+  --el-color-primary-light-3: #3d9a91;
+  --el-color-primary-light-5: #6fb8b0;
+  --el-color-primary-light-7: #a5d4cf;
+  --el-color-primary-light-8: #c0e2de;
+  --el-color-primary-light-9: #e7f4f2;
+  --el-color-primary-dark-2: #0b5d57;
+
+  --app-bg: #f2f7f6;
+  --app-ink: #172b28;
+  --app-muted: #5f7773;
+  --app-border: #dbe7e4;
+  --app-sidebar: #0b3b35;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--app-bg);
+  color: var(--app-ink);
+  font-family:
+    'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-lead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-lead h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.page-lead p {
+  margin-top: 6px;
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.stat-label {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.stat-value {
+  margin-top: 8px;
+  font-size: 24px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-unit {
+  margin-left: 4px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--app-muted);
+}
+
+.mono {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px;
+}
+
+.muted {
+  color: var(--app-muted);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.el-table {
+  --el-table-header-bg-color: #f4f9f8;
+}
+
+@media (max-width: 900px) {
+  .stat-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}

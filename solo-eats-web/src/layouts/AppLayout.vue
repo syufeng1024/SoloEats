@@ -6,6 +6,9 @@ import {
   DataLine,
   Goods,
   Money,
+  OfficeBuilding,
+  PriceTag,
+  Shop,
   SwitchButton,
   Tickets,
   Wallet,
@@ -25,6 +28,10 @@ const MENU_ITEMS: MenuItem[] = [
   { path: '/merchant/products', label: '商品与库存', icon: Goods, roles: [ROLES.MERCHANT] },
   { path: '/merchant/settlements', label: '财务结算', icon: Wallet, roles: [ROLES.MERCHANT] },
   { path: '/admin/overview', label: '运营看板', icon: DataLine, roles: [ROLES.ADMIN] },
+  { path: '/merchant/apply', label: '商家入驻审核', icon: Shop, roles: [ROLES.ADMIN] },
+  { path: '/store/shop', label: '门店管理', icon: OfficeBuilding, roles: [ROLES.ADMIN] },
+  { path: '/product/spu', label: '商品库', icon: Goods, roles: [ROLES.ADMIN] },
+  { path: '/marketing/coupon', label: '券管理', icon: PriceTag, roles: [ROLES.ADMIN] },
   { path: '/admin/settlements', label: '抽成结算', icon: Money, roles: [ROLES.ADMIN] },
 ]
 
