@@ -93,7 +93,11 @@ public enum ErrorCode {
     IM_SESSION_NOT_FOUND(90001, "会话不存在", HttpStatus.NOT_FOUND),
     IM_SESSION_CLOSED(90002, "会话已结束或只读", HttpStatus.CONFLICT),
     IM_NOT_PARTICIPANT(90003, "非会话参与者", HttpStatus.FORBIDDEN),
-    WS_UNAUTHORIZED(90004, "WebSocket 鉴权失败", HttpStatus.UNAUTHORIZED);
+    WS_UNAUTHORIZED(90004, "WebSocket 鉴权失败", HttpStatus.UNAUTHORIZED),
+
+    // T11 报表（10xxxx 段）
+    REPORT_DATE_INVALID(100010, "报表日期范围不合法", HttpStatus.BAD_REQUEST),
+    REPORT_NOT_READY(100011, "报表数据尚未生成", HttpStatus.CONFLICT);
 
     private final int code;
     private final String message;

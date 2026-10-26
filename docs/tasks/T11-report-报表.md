@@ -171,4 +171,4 @@ curl -s -X POST http://localhost:8080/api/v1/c/track -d '{"events":[{"eventType"
 
 | 日期 | 会话范围 | 新增/修改文件 | 编译结果 | 遗留问题 |
 |---|---|---|---|---|
-| _待填_ | | | | |
+| 2026-10-26 | 阶段A | 新增 15 / 修改 5 | 通过：`mvn -q -pl solo-eats-report -am compile`、`mvn -q -DskipTests package` 均 exit 0 | ① 阶段B（漏斗、商品/商家/骑手/财务/用户、埋点、rebuild、单测）未做；② 定时任务无请求上下文，`TenantContext` 取默认租户 1，`t_order` 无 `tenant_id`，跨租户聚合待后续扩展；③ `avg_prep_minutes` 用 `created_at → pickup_ready_at` 近似（`t_order` 无接单时间列）；④ V23 为源表追加 5 个索引（`t_order` 3、`t_payment_order` 1、`t_refund_order` 1），需确认生产执行窗口；⑤ `MerchantReportController` 未改动，沿用既有 `OrderQueryService#dashboard`。 |

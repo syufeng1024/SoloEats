@@ -10,10 +10,10 @@
 |---|---|
 | 任务卡 | 17 张 |
 | 会话单元（阶段） | 约 36 个 |
-| **已完成单元** | **约 24 个（≈67%）** |
-| 后端 Maven 模块 | 13 个（P1 的 service / content / report 三个未建） |
-| 数据库迁移 | Flyway V1~V22，97 张表 |
-| 后端接口 | 61 个 Controller |
+| **已完成单元** | **约 25 个（≈69%）** |
+| 后端 Maven 模块 | 14 个（P1 的 service / content 两个未建） |
+| 数据库迁移 | Flyway V1~V23，103 张表 |
+| 后端接口 | 62 个 Controller |
 | 前端页面 | Web 后台 6 个业务页 · 用户端 11 页 · 骑手端 8 页 · 商家端 8 页 |
 
 ---
@@ -35,7 +35,7 @@
 | **T14** 骑手端 App | A | 登录、听单大厅、任务列表/详情、取货、送达、收入、认证（8 页） |
 | **T15** 商家端 App | A | 登录、订单列表/详情、接单备餐、自取核销、商品与估清、门店设置（8 页） |
 | **T16** 结算 | A | 结算单审核→模拟打款、提现闭环 |
-| **T11** 报表 | 仅工作台卡 | `GET /api/v1/merchant/report/dashboard` 今日计数（经营总览与报表未做） |
+| **T11** 报表 | A | **阶段A 已交付**：`solo-eats-report` 模块、6 张报表表（阶段A 填充平台/门店日报）、工作台实时卡 `GET /api/v1/admin/report/dashboard`、经营总览 `GET /api/v1/admin/report/overview`（日/周/月）、02:30 日聚合 + 每 5 分钟当日刷新；另保留既有 `GET /api/v1/merchant/report/dashboard` |
 
 **可完整跑通的主链路**：
 
@@ -48,12 +48,11 @@
 
 ## 未交付
 
-### P0 缺口（两处，阻断"P0 全绿"）
+### P0 缺口（一处，阻断"P0 全绿"）
 
 | 任务卡 | 缺口 |
 |---|---|
 | **T17 批次0** | Web 后台仍只有 6 个业务页，商家审核 / 门店 / 商品 / 基础券 / 工作台的**配置界面全部未做**；`solo-eats-web-merchant/` 独立商家中心工程未建。任务卡里批次0 定为 P0，理由是规格书 13 章要求「后台每个可配置项必须真实驱动各端效果」，没有界面就无法通过 P0 验收 |
-| **T11 经营总览（阶段A 后半）** | 只有工作台今日卡，**经营总览日粒度 + 5 张核心报表未做**；`solo-eats-report` 模块整个未建 |
 
 ### P1 未启动
 
@@ -77,14 +76,14 @@
 
 ```bash
 # 模块是否建了
-grep -c '<module>' pom.xml                        # 期望 13，P1 全做完应是 16
-ls -d solo-eats-service solo-eats-content solo-eats-report   # 目前三个都不存在
+grep -c '<module>' pom.xml                        # 期望 14，P1 全做完应是 16
+ls -d solo-eats-service solo-eats-content         # 目前两个不存在
 
 # 数据库演进到哪一版
-ls solo-eats-app/src/main/resources/db/migration/*.sql | wc -l   # 期望 22（V22）
+ls solo-eats-app/src/main/resources/db/migration/*.sql | wc -l   # 期望 23（V23）
 
 # 接口规模
-ls solo-eats-app/src/main/java/com/soloeats/app/controller/*.java | wc -l   # 期望 61
+ls solo-eats-app/src/main/java/com/soloeats/app/controller/*.java | wc -l   # 期望 62
 
 # 前端页面数
 grep -c '"path"' solo-eats-uniapp-user/src/pages.json      # 11（阶段A 目标）
