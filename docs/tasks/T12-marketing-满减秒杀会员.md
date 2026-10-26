@@ -3,7 +3,9 @@
 > 优先级：**P0（阶段A-0：平台级单档满减 + 试算/分摊，供下单链路）** / **P1（阶段A：满减/折扣 + 秒杀）→ 阶段B（会员等级/成长值/权益 + 积分/签到/邀请/红包）**
 > 所属模块：`solo-eats-marketing`（增量改造）+ `solo-eats-app`
 > 分三段：**阶段A-0（P0 提前包，约 3 个文件）→ 阶段A（满减/折扣 + 秒杀）→ 阶段B（会员等级/成长值/权益 + 积分/签到/邀请/红包）**
-> 说明：README Q3 已确认「P0 只做平台级单档满减」；9.8 优惠分摊规则要求满减参与分摊，故必须在下单链路（批次 4 前）提前交付阶段A-0，否则 P0 满减分摊无着落。规格书 1.6 平台后台 P0 亦含「基础券」——券模板/用户券后端已既有实现，本卡不重复；其**管理页面**归 T17 阶段A 提级（见 T17）。
+> 说明：README Q3 已确认「P0 只做平台级单档满减」；9.8 优惠分摊规则要求满减参与分摊，故必须在下单链路（批次 4 前）提前交付阶段A-0，否则 P0 满减分摊无着落。规格书 1.6 平台后台 P0 亦含「基础券」——券模板/用户券**实体与 C 端核销逻辑**已既有实现，本卡不重复；其**管理页面**归 T17 阶段A 提级（见 T17）。
+>
+> **2026-10-26 勘误**：原文「券模板/用户券后端已既有实现」只对了一半。实测 `CouponService` 只有 C 端 `lock/release/consume/rollback` 四个方法，`CouponTemplateMapper` 没有对外 CRUD，全仓库 61 个 Controller 中**没有任何券后台接口**（无 `AdminCouponController`、无 `/api/v1/admin/coupons`）。因此 T17 的券管理页无接口可调。为此本卡新增 **阶段A-1（券后台管理）**，补齐券模板 CRUD + 定向发券 + 领取记录查询，作为 T17 批次0 券页的前置。
 
 ---
 
@@ -119,6 +121,80 @@
 | 新 | `solo-eats-marketing/src/test/java/com/soloeats/marketing/service/DiscountApportionerTest.java`（余数归最大项、合计=总额、单项全免三组） |
 
 > 阶段A-0 必须在 **order 模块下单链路（批次 4）** 前完成；否则 P0 满减无法参与 9.8 分摊。
+
+### 阶段A-1（P0 补充包，约 7 个：券后台管理）
+
+> 交付理由见本卡开头 2026-10-26 勘误。T17 批次0 的「基础券管理页」依赖本阶段接口，故必须先于 T17 批次0 交付。
+> **只补后台读写入口**：`t_coupon_template` / `t_user_coupon` / `t_user_coupon_log` 三张表结构与 `CouponService` 的 C 端四个方法（`lock/release/consume/rollback`）**一律不动**。
+
+**接口清单**
+
+| # | 方法 | 路径 | 要点 | 权限 |
+|---|---|---|---|---|
+| A1-1 | GET | `/api/v1/admin/coupons` | 模板分页列表，筛选 `name?`/`status?`/`couponType?`/`bearer?`；返回 `issuedQty`/`totalQty` | `marketing:coupon:list` |
+| A1-2 | GET | `/api/v1/admin/coupons/{id}` | 模板详情 | `marketing:coupon:list` |
+| A1-3 | POST | `/api/v1/admin/coupons` | 新建模板；`issuedQty` 由系统维护，**拒绝**客户端传入 | `marketing:coupon:save` |
+| A1-4 | PUT | `/api/v1/admin/coupons/{id}` | 编辑模板；**只允许**改 `name`/`thresholdAmount`/`discountAmount`/`discountRate`/`totalQty`/`validStart`/`validEnd`/`validDays`；`totalQty` 不得小于已发放 `issuedQty` | `marketing:coupon:save` |
+| A1-5 | PUT | `/api/v1/admin/coupons/{id}/status` | 启用/停用（`0启用 1停用`，注意是反直觉取值） | `marketing:coupon:save` |
+| A1-6 | POST | `/api/v1/admin/coupons/{id}/grant` | 定向发券 `{userIds:[...]}`，单次 ≤500 人；按 `valid_days` 计算 `expire_at`，未配置则回落模板 `valid_end` | `marketing:coupon:grant` |
+| A1-7 | GET | `/api/v1/admin/coupons/{id}/records` | 该模板的用户券记录分页（`userId`/`status`/`expireAt`/`usedAt`/`orderId`），支持 `status?` 筛选 | `marketing:coupon:list` |
+
+**需要新增/修改的文件**
+
+| 类型 | 路径 |
+|---|---|
+| 新 | `solo-eats-marketing/src/main/java/com/soloeats/marketing/service/CouponAdminService.java` + `.../service/impl/CouponAdminServiceImpl.java` |
+| 新 | `.../service/command/CouponTemplateSaveCommand.java`、`.../service/view/CouponTemplateView.java`、`.../service/view/CouponGrantRecordView.java` |
+| 改 | `.../mapper/CouponTemplateMapper.java`（仅新增条件更新方法 `deductIssueQty(id, qty)`，不改既有方法） |
+| 新 | `solo-eats-app/src/main/java/com/soloeats/app/controller/AdminCouponController.java` |
+| 新 | `solo-eats-app/src/main/java/com/soloeats/app/dto/CouponTemplateSaveRequest.java`、`CouponGrantRequest.java` |
+| 新 | `solo-eats-app/src/main/resources/db/migration/V24__coupon_admin_menu.sql`（**只插 `t_sys_menu` + `t_sys_role_menu` 种子**，不动任何既有表结构） |
+| 新 | `solo-eats-marketing/src/test/java/com/soloeats/marketing/service/impl/CouponAdminServiceImplTest.java` |
+
+**关键约束（本阶段专属）**
+
+| 项 | 约束 |
+|---|---|
+| **迁移序号** | 派发时先 `ls solo-eats-app/src/main/resources/db/migration/ \| sort -V` 取实际最大序号 +1。若 T11 阶段A 已占用 `V23`，本阶段用 **`V24__coupon_admin_menu.sql`**；若最大仍是 `V22` 则用 `V23`。**不要**照抄本卡写的 V24 |
+| **不建表** | `t_coupon_template`/`t_user_coupon`/`t_user_coupon_log` 是 `V1__init_schema.sql` 既有表，**禁止** `ALTER`，也**禁止**改 V1 原文（本卡禁止事项 10）。故本阶段迁移脚本**只含菜单种子 INSERT** |
+| **无 tenant_id** | `t_coupon_template` **没有** `tenant_id` 列（V1 建表即如此）。**不要**给实体加 `tenantId` 字段，也不要手写租户条件，按平台级全局表处理 |
+| **发券并发** | `issued_qty` 必须条件更新，禁止「先查余量再 UPDATE」：<br>`UPDATE t_coupon_template SET issued_qty = issued_qty + #{qty} WHERE id = #{id} AND issued_qty + #{qty} <= total_qty`<br>影响行数为 0 → 抛 `COUPON_STOCK_NOT_ENOUGH`。批量发券**整体一个事务**，任一张不足则全量回滚 |
+| **停用模板** | `status != 0` 的模板禁止发券，抛 `COUPON_TEMPLATE_STATUS_INVALID` |
+| **不改券语义** | 新增能力只走 `CouponAdminService`，**不得**往 `CouponService` 接口里加方法，不得改 `CouponLockResult`、`UserCoupon.status` 的取值语义。`CouponServiceImplTest` 13 个断言必须继续全绿 |
+| **菜单 ID** | 现有 `t_sys_menu` 最大 id = **114**。本阶段从 **115** 起，挂在「营销中心」`parent_id=6` 下：115 `基础券`（menu_type 2, perms `marketing:coupon:list`）、116 `券模板维护`（3, `marketing:coupon:save`）、117 `定向发券`（3, `marketing:coupon:grant`）。种子用 `ON DUPLICATE KEY UPDATE id = id` 保持可重复执行 |
+| **新增错误码** | 追加到 `ErrorCode`（4xxxx 段）：`40210 COUPON_TEMPLATE_NOT_FOUND`、`40211 COUPON_STOCK_NOT_ENOUGH`、`40212 COUPON_TEMPLATE_STATUS_INVALID` |
+| **金额与折扣** | `threshold_amount`/`discount_amount` 用 `long` 分；`discount_rate` 用 `BigDecimal` + `setScale(4, HALF_UP)`，范围 `(0,1]` |
+
+**验收标准**
+
+```bash
+mvn -q -pl solo-eats-marketing -am compile && mvn -q -DskipTests package
+mvn -q -pl solo-eats-marketing test -Dtest='CouponServiceImplTest'   # 13/13 必须仍全绿
+
+# 模板 CRUD
+curl -s -X POST http://localhost:8080/api/v1/admin/coupons -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"name":"新人5元","couponType":3,"thresholdAmount":0,"discountAmount":500,"bearer":1,"totalQty":100,"validDays":7}'
+# 断言：code=0；t_coupon_template 新增 1 行，issued_qty=0，status=0
+
+# 超发拒绝（totalQty=1 的模板连发 2 张）
+curl -s -X POST http://localhost:8080/api/v1/admin/coupons/{id}/grant -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"userIds":[1001,1002]}'
+# 断言：code=40211；t_user_coupon 该模板行数为 0（整批回滚），issued_qty 仍为 0
+
+# 发券成功 + 过期时间
+curl -s -X POST http://localhost:8080/api/v1/admin/coupons/{id}/grant -H "Authorization: Bearer $ADMIN_TOKEN" -d '{"userIds":[1001]}'
+# 断言：t_user_coupon 新增 1 行，status=0，expire_at ≈ now + validDays；issued_qty=1
+
+# 停用后发券
+curl -s -X PUT http://localhost:8080/api/v1/admin/coupons/{id}/status -H "Authorization: Bearer $ADMIN_TOKEN" -d '{"status":1}'
+curl -s -X POST http://localhost:8080/api/v1/admin/coupons/{id}/grant -H "Authorization: Bearer $ADMIN_TOKEN" -d '{"userIds":[1002]}'
+# 断言：code=40212
+
+# 权限
+curl -s http://localhost:8080/api/v1/admin/coupons -H "Authorization: Bearer $MERCHANT_TOKEN"
+# 断言：code=10004（商家不可访问平台券管理）
+```
+
 
 ### 阶段A（15 个）
 
