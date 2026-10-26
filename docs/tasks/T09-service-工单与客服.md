@@ -1,7 +1,55 @@
 # T09 service-客服工单 · 投诉 · FAQ · 意见反馈
 
 > 优先级：**P1** · 所属模块：`solo-eats-service`（新建）+ `solo-eats-app`
-> 单段执行（约 14 个文件）
+> 原定「单段执行（约 14 个文件）」，实际 26 个端点 + 6 张表，已拆为 **阶段A / 阶段B**（见下）
+
+---
+
+## 阶段拆分与勘误（2026-10-27 落地前核对）
+
+### 拆成两段的原因
+
+客服工作台（接口 21~26）需要给 `t_im_session` 加坐席字段，属**改既有表结构**；与工单主干的建表是两类变更，混在一段里回归面太大。故：
+
+| 阶段 | 范围 | 迁移 | 端点 |
+|---|---|---|---|
+| **阶段A** | 工单主干 + 投诉 + FAQ + 意见反馈 + 工单统计 | `V25__service_ticket.sql`（建 6 表 + 菜单种子） | 1~20 |
+| **阶段B** | 客服工作台坐席端（会话列表/接待/转接/结束/快捷话术/会话记录） | `V26__cs_session_agent.sql`（`t_im_session` 加列 + `t_quick_reply` 若 A 段未建） | 21~26 |
+
+### 三处与仓库现状不符，以本节为准
+
+1. **迁移序号**：本文件写的 `V15__service_ticket.sql` 已被 `V15__delivery_track_anomaly.sql` 占用。当前实际最大为 **`V24`**，故阶段A 用 **`V25`**，阶段B 用 **`V26`**。动手前用 `ls solo-eats-app/src/main/resources/db/migration/ | sort -V | tail -3` 复核。`CLAUDE.md` 第 6 节「当前最大 `V3`」是过期描述，不要照抄。
+
+2. **`ImService` 不存在**：本文件多处写「复用 T08 `ImService`」，实际 T08 交付的接口是 **`ImSessionService`**（`solo-eats-message/service/ImSessionService.java`），只有 6 个方法：`getOrCreate / listMine / messages / send / markRead / hide`。坐席端需要的「全局会话列表、接待、转接、结束」**都没有**，阶段B 只能在 `ImSessionService` 上**新增方法**（禁止改既有签名）。
+
+3. **`t_im_session` 没有坐席字段**：现有列为 `user_id / peer_type / peer_id / last_message / last_message_at / user_unread / peer_unread / status / user_hidden / peer_hidden`，**没有 `agent_id`**。阶段B 的「接待 / 转接 / 按坐席看会话」必须先 `ALTER TABLE t_im_session ADD COLUMN agent_id ...`（只加列，禁止 DROP/MODIFY 既有列）。
+
+### 菜单与权限种子（现 `t_sys_menu` 最大 id = 119，一级「客服与工单」= id 10）
+
+**阶段A（V25）** —— 全部挂 `parent_id=10` 下的两级树：
+
+| id | parent | 名称 | type | path | perms |
+|---|---|---|---|---|---|
+| 120 | 10 | 工单管理 | 2 | `/service/ticket` | `service:ticket:list` |
+| 121 | 120 | 工单详情 | 3 | NULL | `service:ticket:detail` |
+| 122 | 120 | 工单处理 | 3 | NULL | `service:ticket:handle` |
+| 123 | 120 | 工单指派 | 3 | NULL | `service:ticket:assign` |
+| 124 | 120 | 工单关闭 | 3 | NULL | `service:ticket:close` |
+| 125 | 10 | 投诉处理 | 2 | `/service/complaint` | `service:complaint:list` |
+| 126 | 125 | 责任判定 | 3 | NULL | `service:complaint:judge` |
+| 127 | 10 | FAQ 维护 | 2 | `/service/faq` | `service:faq:list` |
+| 128 | 127 | FAQ 编辑 | 3 | NULL | `service:faq:save` |
+| 129 | 10 | 意见反馈 | 2 | `/service/feedback` | `service:feedback:list` |
+| 130 | 129 | 反馈回复 | 3 | NULL | `service:feedback:reply` |
+
+**阶段B（V26）**：
+
+| id | parent | 名称 | type | path | perms |
+|---|---|---|---|---|---|
+| 131 | 10 | 客服工作台 | 2 | `/service/cs` | `service:cs:list` |
+| 132 | 131 | 会话接待 | 3 | NULL | `service:cs:handle` |
+
+种子一律 `ON DUPLICATE KEY UPDATE id = id`，并给 `tenant_id=1, role_id=1` 授权。
 
 ---
 
