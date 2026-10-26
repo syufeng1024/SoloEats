@@ -40,6 +40,11 @@ public enum ErrorCode {
     COUPON_NOT_AVAILABLE(40008, "优惠券不可用", HttpStatus.CONFLICT),
     COUPON_STATE_INVALID(40009, "优惠券状态不一致", HttpStatus.CONFLICT),
 
+    // T12 阶段A-1 券后台管理（402xx 段）
+    COUPON_TEMPLATE_NOT_FOUND(40210, "优惠券模板不存在", HttpStatus.NOT_FOUND),
+    COUPON_STOCK_NOT_ENOUGH(40211, "优惠券剩余可发数量不足", HttpStatus.CONFLICT),
+    COUPON_TEMPLATE_STATUS_INVALID(40212, "优惠券模板状态不允许发券", HttpStatus.CONFLICT),
+
     // T05 商品中心（401xx 段）
     CATEGORY_NOT_FOUND(40101, "品类不存在", HttpStatus.NOT_FOUND),
     CATEGORY_HAS_CHILDREN(40102, "品类下存在子品类或商品，不能删除", HttpStatus.CONFLICT),
