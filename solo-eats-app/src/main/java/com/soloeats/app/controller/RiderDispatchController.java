@@ -15,6 +15,7 @@ import com.soloeats.common.api.PageResult;
 import com.soloeats.common.auth.AuthContext;
 import com.soloeats.common.auth.RequireRole;
 import com.soloeats.common.auth.Roles;
+import com.soloeats.common.auth.UserPrincipal;
 import com.soloeats.common.exception.BizException;
 import com.soloeats.common.exception.ErrorCode;
 import com.soloeats.common.idempotency.Idempotent;
@@ -86,8 +87,9 @@ public class RiderDispatchController {
 
     @GetMapping("/certification")
     public ApiResponse<MyCertificationView> myCertification() {
-        Long userId = AuthContext.require().userId();
-        return ApiResponse.ok(riderService.myCertification(userId));
+        UserPrincipal principal = AuthContext.require();
+        return ApiResponse.ok(
+                riderService.myCertification(principal.userId(), principal.riderId()));
     }
 
     @PutMapping("/online")
@@ -200,7 +202,8 @@ public class RiderDispatchController {
     }
 
     private Long currentRiderId() {
-        return riderService.requireRiderIdByUserId(AuthContext.require().userId());
+        UserPrincipal principal = AuthContext.require();
+        return riderService.resolveRiderId(principal.userId(), principal.riderId());
     }
 
     private int itemCount(Map<Long, Integer> counts, Long orderId) {

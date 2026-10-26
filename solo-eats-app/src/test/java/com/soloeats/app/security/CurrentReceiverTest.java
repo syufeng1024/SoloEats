@@ -63,7 +63,17 @@ class CurrentReceiverTest {
     @DisplayName("骑手用 userId 反查 t_rider.id")
     void riderResolvesRiderIdByUserId() {
         UserPrincipal principal = principal(RIDER_USER_ID, null, Set.of(Roles.RIDER));
-        when(riderService.requireRiderIdByUserId(RIDER_USER_ID)).thenReturn(RIDER_ID);
+        when(riderService.resolveRiderId(RIDER_USER_ID, null)).thenReturn(RIDER_ID);
+
+        assertThat(currentReceiver.receiverId(principal)).isEqualTo(RIDER_ID);
+    }
+
+    @Test
+    @DisplayName("别名账号反查不到时回落令牌 riderId")
+    void riderFallsBackToTokenRiderId() {
+        UserPrincipal principal = new UserPrincipal(
+                1L, RIDER_USER_ID, "rider1", null, null, RIDER_ID, Set.of(Roles.RIDER));
+        when(riderService.resolveRiderId(RIDER_USER_ID, RIDER_ID)).thenReturn(RIDER_ID);
 
         assertThat(currentReceiver.receiverId(principal)).isEqualTo(RIDER_ID);
     }
@@ -81,7 +91,7 @@ class CurrentReceiverTest {
     @DisplayName("骑手未建档抛 10004，而非 10002")
     void riderWithoutProfileIsForbidden() {
         UserPrincipal principal = principal(RIDER_USER_ID, null, Set.of(Roles.RIDER));
-        when(riderService.requireRiderIdByUserId(RIDER_USER_ID))
+        when(riderService.resolveRiderId(RIDER_USER_ID, null))
                 .thenThrow(new BizException(ErrorCode.RESOURCE_NOT_FOUND));
 
         assertBizCode(() -> currentReceiver.receiverId(principal), ErrorCode.AUTH_FORBIDDEN);

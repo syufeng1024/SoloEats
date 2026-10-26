@@ -5,6 +5,7 @@ import com.soloeats.common.api.PageResult;
 import com.soloeats.common.auth.AuthContext;
 import com.soloeats.common.auth.RequireRole;
 import com.soloeats.common.auth.Roles;
+import com.soloeats.common.auth.UserPrincipal;
 import com.soloeats.delivery.service.RiderIncomeService;
 import com.soloeats.delivery.service.RiderService;
 import com.soloeats.delivery.service.view.RiderIncomeDetailView;
@@ -48,6 +49,7 @@ public class RiderIncomeController {
     }
 
     private Long currentRiderId() {
-        return riderService.requireRiderIdByUserId(AuthContext.require().userId());
+        UserPrincipal principal = AuthContext.require();
+        return riderService.resolveRiderId(principal.userId(), principal.riderId());
     }
 }

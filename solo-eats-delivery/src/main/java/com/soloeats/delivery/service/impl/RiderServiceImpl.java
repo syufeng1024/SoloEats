@@ -140,7 +140,12 @@ public class RiderServiceImpl implements RiderService {
 
     @Override
     public MyCertificationView myCertification(Long userId) {
-        Rider rider = userId == null ? null : findByUserId(userId);
+        return myCertification(userId, null);
+    }
+
+    @Override
+    public MyCertificationView myCertification(Long userId, Long riderIdClaim) {
+        Rider rider = resolveRider(userId, riderIdClaim);
         if (rider == null) {
             return new MyCertificationView(null, null, null,
                     RiderCertStatus.NOT_SUBMITTED.getCode(), null, null, null);
@@ -154,6 +159,30 @@ public class RiderServiceImpl implements RiderService {
                 rider.getCertRemark(),
                 rider.getHealthCertExpireAt(),
                 rider.getVehicleType());
+    }
+
+    @Override
+    public Long resolveRiderId(Long userId, Long riderIdClaim) {
+        Rider rider = resolveRider(userId, riderIdClaim);
+        if (rider == null) {
+            throw new BizException(ErrorCode.RESOURCE_NOT_FOUND, "骑手档案不存在，请先提交认证");
+        }
+        return rider.getId();
+    }
+
+    /**
+     * 先按登录账号反查（DB 为准），查不到才用令牌里的 riderId 兜底。
+     * 兜底时会校验档案真实存在，避免签名里的陈旧 riderId 把请求带到不存在的骑手。
+     */
+    private Rider resolveRider(Long userId, Long riderIdClaim) {
+        Rider byUser = userId == null ? null : findByUserId(userId);
+        if (byUser != null) {
+            return byUser;
+        }
+        if (riderIdClaim == null || riderIdClaim <= 0L) {
+            return null;
+        }
+        return riderMapper.selectById(riderIdClaim);
     }
 
     @Override

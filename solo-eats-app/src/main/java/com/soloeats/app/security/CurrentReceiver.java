@@ -53,7 +53,7 @@ public class CurrentReceiver {
             return requirePositive(principal.merchantId());
         }
         if (receiverType == ReceiverType.RIDER.getCode()) {
-            return requireRiderId(principal.userId());
+            return requireRiderId(principal);
         }
         // C_USER 的 userId 即 t_member_user.id；平台后台取 t_sys_user.id
         return requirePositive(principal.userId());
@@ -66,12 +66,17 @@ public class CurrentReceiver {
         return id;
     }
 
-    /** 骑手 token 里的 userId 是 t_sys_user.id，需反查 t_rider.id 才能对上 peer_id。 */
-    private Long requireRiderId(Long userId) {
+    /**
+     * 骑手 token 里的 userId 是 t_sys_user.id，需反查 t_rider.id 才能对上 peer_id。
+     * 反查不到时由 RiderService 回落到令牌里的 riderId（rider1/rider001 别名口径）。
+     */
+    private Long requireRiderId(UserPrincipal principal) {
         try {
-            return requirePositive(riderService.requireRiderIdByUserId(userId));
+            return requirePositive(
+                    riderService.resolveRiderId(principal.userId(), principal.riderId()));
         } catch (BizException ex) {
-            log.debug("resolve rider id failed userId={} reason={}", userId, ex.getMessage());
+            log.debug("resolve rider id failed userId={} riderId={} reason={}",
+                    principal.userId(), principal.riderId(), ex.getMessage());
             throw new BizException(ErrorCode.AUTH_FORBIDDEN, UNRESOLVED_SUBJECT);
         }
     }
