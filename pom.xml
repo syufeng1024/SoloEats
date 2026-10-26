@@ -33,6 +33,7 @@
         <module>solo-eats-message</module>
         <module>solo-eats-service</module>
         <module>solo-eats-report</module>
+        <module>solo-eats-content</module>
         <module>solo-eats-app</module>
     </modules>
 
@@ -190,6 +191,11 @@
             <dependency>
                 <groupId>com.soloeats</groupId>
                 <artifactId>solo-eats-report</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.soloeats</groupId>
+                <artifactId>solo-eats-content</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

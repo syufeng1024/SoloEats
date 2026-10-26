@@ -218,4 +218,4 @@ curl -s "http://localhost:8080/api/v1/c/app/version?appType=1&currentCode=100"
 
 | 日期 | 会话范围 | 新增/修改文件 | 编译结果 | 遗留问题 |
 |---|---|---|---|---|
-| _待填_ | | | | |
+| 2026-10-27 | T10 全卡：首页装修 + 广告位 + 搜索运营 + App 版本（接口 1~14，一次交付） | 51（新增 48 / 修改 3） | 通过：`mvn -q -pl solo-eats-content -am compile`；`mvn -q -DskipTests package`；`AppVersionServiceImplTest` 12/12 | V26 未在 MySQL 实库执行（未动 Docker），菜单 133~141 需随迁移生效；`audience=1` 以未登录近似新客、`audience=2` 以已登录近似会员、`audience=3` 落库不生效（`TODO(P1)`，content 不依赖 member/order）；`click_count` 仅有字段与视图，无埋点自增接口；首页编辑直接清缓存，无独立草稿快照；非默认租户缓存键追加 `:t{tenantId}` 防串页，默认租户与卡片一致；P95≤300ms 未压测（已保证聚合查询次数固定） |

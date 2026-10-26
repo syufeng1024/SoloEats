@@ -106,6 +106,10 @@ public enum ErrorCode {
     TICKET_NOT_OWNER(90012, "非工单提交者", HttpStatus.FORBIDDEN),
     TICKET_ALREADY_ASSIGNED(90013, "工单已被受理", HttpStatus.CONFLICT),
 
+    // T10 内容运营（90020 起）
+    CONTENT_FLOOR_INVALID(90020, "首页楼层引用的类目/店铺/商品不存在或不可用", HttpStatus.BAD_REQUEST),
+    CONTENT_VERSION_EXISTS(90021, "该端已存在相同版本号", HttpStatus.CONFLICT),
+
     // T11 报表（10xxxx 段）
     REPORT_DATE_INVALID(100010, "报表日期范围不合法", HttpStatus.BAD_REQUEST),
     REPORT_NOT_READY(100011, "报表数据尚未生成", HttpStatus.CONFLICT);
