@@ -100,6 +100,12 @@ public enum ErrorCode {
     IM_NOT_PARTICIPANT(90003, "非会话参与者", HttpStatus.FORBIDDEN),
     WS_UNAUTHORIZED(90004, "WebSocket 鉴权失败", HttpStatus.UNAUTHORIZED),
 
+    // T09 客服工单（90010 起）
+    TICKET_NOT_FOUND(90010, "工单不存在", HttpStatus.NOT_FOUND),
+    TICKET_STATUS_INVALID(90011, "工单状态不允许当前操作", HttpStatus.CONFLICT),
+    TICKET_NOT_OWNER(90012, "非工单提交者", HttpStatus.FORBIDDEN),
+    TICKET_ALREADY_ASSIGNED(90013, "工单已被受理", HttpStatus.CONFLICT),
+
     // T11 报表（10xxxx 段）
     REPORT_DATE_INVALID(100010, "报表日期范围不合法", HttpStatus.BAD_REQUEST),
     REPORT_NOT_READY(100011, "报表数据尚未生成", HttpStatus.CONFLICT);

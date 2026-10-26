@@ -10,10 +10,10 @@
 |---|---|
 | 任务卡 | 17 张 |
 | 会话单元（阶段） | 约 36 个 |
-| **已完成单元** | **约 27 个（≈75%）** |
-| 后端 Maven 模块 | 14 个（P1 的 service / content 两个未建） |
-| 数据库迁移 | Flyway V1~V24，103 张表 |
-| 后端接口 | 63 个 Controller |
+| **已完成单元** | **约 28 个（≈78%）** |
+| 后端 Maven 模块 | 15 个（P1 的 content 未建） |
+| 数据库迁移 | Flyway V1~V25，109 张表 |
+| 后端接口 | 66 个 Controller |
 | 前端页面 | Web 后台 12 个业务页 · 商家中心独立工程 4 页 · 用户端 11 页 · 骑手端 8 页 · 商家端 8 页 |
 
 ---
@@ -37,6 +37,7 @@
 | **T16** 结算 | A | 结算单审核→模拟打款、提现闭环 |
 | **T11** 报表 | A | **阶段A 已交付**：`solo-eats-report` 模块、6 张报表表（阶段A 填充平台/门店日报）、工作台实时卡 `GET /api/v1/admin/report/dashboard`、经营总览 `GET /api/v1/admin/report/overview`（日/周/月）、02:30 日聚合 + 每 5 分钟当日刷新；另保留既有 `GET /api/v1/merchant/report/dashboard` |
 | **T17** 运营后台与商家中心 | 批次0 | **P0 收口**：运营后台新增商家入驻审核、门店管理、商品库列表、基础券管理 4 组 6 页 + 工作台 7 张今日卡；`solo-eats-web/shared/` 共享层抽出；`solo-eats-web-merchant/` 独立商家中心工程（base `/merchant/`，复制 3 个商家视图）。两条 `npm run build` 均通过，单测 10/10 |
+| **T09** 客服工单 | A | 新建 `solo-eats-service` 模块、6 张表（`t_service_ticket`/`t_ticket_record`/`t_complaint`/`t_faq`/`t_feedback`/`t_quick_reply`）；工单状态机 `0→1→2→3`、仅允许 `→4` 关闭；C 端提交/查询/撤单/评价、投诉、FAQ、意见反馈 8 端点；后台受理/指派/处理/回访/办结/关闭、投诉责任判定、FAQ 维护、反馈回复、工单统计 12 端点 |
 
 **可完整跑通的主链路**：
 
@@ -59,7 +60,7 @@
 
 | 任务卡 | 缺口 |
 |---|---|
-| T09 客服工单 | `solo-eats-service` 模块未建，全项目无任何工单控制器 |
+| T09 客服工单 | **阶段A 已交付**（工单主干/投诉/FAQ/反馈/统计，接口 1~20）；**阶段B 未做**（客服工作台坐席端接口 21~26、`t_im_session` 加 `agent_id`、快捷话术服务） |
 | T10 内容装修 | `solo-eats-content` 模块未建，无 Banner / 金刚区 / 楼层接口 |
 | T11 阶段B | 经营/流量/商品/财务报表 |
 | T12 阶段A/B | 阶梯满减、商家满减、秒杀、会员等级、积分、签到 |
@@ -77,14 +78,14 @@
 
 ```bash
 # 模块是否建了
-grep -c '<module>' pom.xml                        # 期望 14，P1 全做完应是 16
-ls -d solo-eats-service solo-eats-content         # 目前两个不存在
+grep -c '<module>' pom.xml                        # 期望 15，P1 全做完应是 16
+ls -d solo-eats-content                           # 目前唯一未建的模块
 
 # 数据库演进到哪一版
-ls solo-eats-app/src/main/resources/db/migration/*.sql | wc -l   # 期望 24（V24）
+ls solo-eats-app/src/main/resources/db/migration/*.sql | wc -l   # 期望 25（V25）
 
 # 接口规模
-ls solo-eats-app/src/main/java/com/soloeats/app/controller/*.java | wc -l   # 期望 63
+ls solo-eats-app/src/main/java/com/soloeats/app/controller/*.java | wc -l   # 期望 66
 
 # 前端页面数
 grep -c '"path"' solo-eats-uniapp-user/src/pages.json      # 11（阶段A 目标）

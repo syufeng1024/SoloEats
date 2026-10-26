@@ -225,4 +225,4 @@ curl -s "http://localhost:8080/api/v1/admin/tickets/stats?dateFrom=2025-01-01&da
 
 | 日期 | 会话范围 | 新增/修改文件 | 编译结果 | 遗留问题 |
 |---|---|---|---|---|
-| _待填_ | | | | |
+| 2026-10-27 | T09 阶段A：工单主干 + 投诉 + FAQ + 意见反馈 + 工单统计（接口 1~20） | 52（新增 49 / 修改 3） | 通过：`mvn -q -pl solo-eats-service -am compile`；`mvn -q -DskipTests package`；`TicketStatusTest` 7/7 | 阶段B（接口 21~26、`t_im_session` 加列、`QuickReplyService`/`AdminCsController`）未做；投诉的扣款/封禁仅登记 `punish_action`，执行端口待 T03/T04/T07；`stats` 接待量只含工单量 |
