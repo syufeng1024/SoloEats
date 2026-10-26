@@ -26,3 +26,6 @@ target-mvn/
 
 # WorkBuddy 本地会话记忆（不入库，仅本地）
 .workbuddy/memory/
+
+# 临时进度文件（项目完工后整目录删除，不入库）
+docs/progress/
