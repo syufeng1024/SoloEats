@@ -5,6 +5,56 @@
 
 ---
 
+## 落地前核对与勘误（2026-10-27）
+
+### 1. 迁移号是 `V26`，不是本文件写的 `V16`
+
+`V16` 已被 `V16__delivery_freight_income.sql` 占用；当前实际最大为 **`V25`**（T09 阶段A 刚落）。
+故本卡用 **`V26__content.sql`**。动手前先跑 `ls solo-eats-app/src/main/resources/db/migration/ | sort -V | tail -3` 复核，以**实际最大 +1** 为准。
+`CLAUDE.md` 第 6 节「当前最大 `V3`」是过期描述，不要照抄。
+
+### 2. 菜单权限种子：现最大 id = 130，本卡从 133 起
+
+`t_sys_menu` 一级「内容运营」= **id 9**。T09 阶段A 已占用 120~130，T09 阶段B 预留 131~132，故本卡从 **133** 起：
+
+| id | parent | 名称 | type | path | perms |
+|---|---|---|---|---|---|
+| 133 | 9 | 首页装修 | 2 | `/content/home` | `content:home:list` |
+| 134 | 133 | 楼层编辑 | 3 | NULL | `content:home:update` |
+| 135 | 133 | 首页发布 | 3 | NULL | `content:home:publish` |
+| 136 | 9 | 广告位管理 | 2 | `/content/banner` | `content:banner:list` |
+| 137 | 136 | 广告位编辑 | 3 | NULL | `content:banner:save` |
+| 138 | 9 | 搜索运营 | 2 | `/content/search` | `content:search:list` |
+| 139 | 138 | 搜索词编辑 | 3 | NULL | `content:search:save` |
+| 140 | 9 | App 版本 | 2 | `/content/version` | `content:version:list` |
+| 141 | 140 | 版本编辑 | 3 | NULL | `content:version:save` |
+
+本卡「接口清单」里的 `content:banner:*` / `content:search:*` / `content:version:*` 通配写法，落地为上面具体的 `:list` / `:save` 两个码。
+种子一律 `ON DUPLICATE KEY UPDATE id = id`，并给 `tenant_id=1, role_id=1` 授 `t_sys_role_menu`——**漏授会全部 10004**。
+
+### 3. 依赖调用方式：校验走 service 接口，聚合走自建只读 Mapper
+
+`CLAUDE.md` 第 2 节红线：领域模块之间**只能依赖 service 接口**，不得直接依赖对方的 `domain` 实体或 `mapper`。已核对的可用方法：
+
+| 用途 | 既有方法 |
+|---|---|
+| 校验 `categoryId` 存在 | `product` → `CategoryService.tree()`（返回树，需自行摊平查找） |
+| 校验 `shopId` 存在且营业 | `store` → `ShopService.detail(shopId)`、`ShopService.businessStatus(shopId)` |
+| 校验 `spuId` 存在 | `product` → `SpuService.detail(spuId)` |
+
+**注意：没有**「推荐店铺列表」「猜你喜欢商品列表」这类现成方法，也没有 `CategoryService.getById`。
+所以首页聚合里的「推荐店铺 / 猜你喜欢」**由 content 模块自建只读 Mapper 写原生 SQL 直查 `t_shop` / `t_shop_spu`**（与 `solo-eats-report` 的 `ReportSourceMapper` 同法），**禁止**去改 `store` / `product` 的代码或实体。校验类走上面的 service 接口。
+
+### 4. 公告不建表
+
+`t_sys_notice` 已由 T02 建好（已核实存在）。`floor_type=7 公告条` 只读引用，**不得**新建公告表。
+
+### 5. 错误码不冲突
+
+本卡 `90020 CONTENT_FLOOR_INVALID`、`90021 CONTENT_VERSION_EXISTS` 与 T09 的 `90010~90013` 不冲突，可照用。
+
+---
+
 ## 目标
 
 **一句话**：让用户端首页**不是写死的**——Banner、金刚区、楼层、搜索词、公告、版本更新全部由后台配置并按生效时间/人群下发。
