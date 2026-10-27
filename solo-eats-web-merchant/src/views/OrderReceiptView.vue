@@ -23,7 +23,12 @@ const orderId = computed(() => {
 })
 
 const isPickup = computed(() => detail.value?.fulfillmentType === 2)
-const statusMeta = computed(() => orderStatusMeta(detail.value?.status))
+const statusMeta = computed(() => {
+  const meta = orderStatusMeta(detail.value?.status)
+  // 后端已按 refund_status 纠正文案（全额退款 → 「已退款」），优先用它
+  const name = detail.value?.statusName
+  return name ? { ...meta, label: name } : meta
+})
 
 async function load(): Promise<void> {
   const id = orderId.value

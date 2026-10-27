@@ -254,7 +254,7 @@ onMounted(load)
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="orderStatusMeta(row.status).tag" size="small">
-              {{ orderStatusMeta(row.status).label }}
+              {{ row.statusName || orderStatusMeta(row.status).label }}
             </el-tag>
           </template>
         </el-table-column>

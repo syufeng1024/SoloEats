@@ -93,7 +93,7 @@ public class AdminOrderReadServiceImpl implements AdminOrderReadService {
                 order.getMerchantId(),
                 order.getShopId(),
                 order.getStatus(),
-                statusName(order.getStatus()),
+                statusName(order.getStatus(), order.getRefundStatus()),
                 order.getFulfillmentType(),
                 fulfillmentTypeName(order.getFulfillmentType()),
                 order.getPaymentStatus(),
@@ -232,7 +232,7 @@ public class AdminOrderReadServiceImpl implements AdminOrderReadService {
                         order.getMerchantId(),
                         order.getShopId(),
                         order.getStatus(),
-                        statusName(order.getStatus()),
+                        statusName(order.getStatus(), order.getRefundStatus()),
                         order.getExceptionType(),
                         exceptionTypeName(order.getExceptionType()),
                         order.getPayAmount(),
@@ -293,7 +293,7 @@ public class AdminOrderReadServiceImpl implements AdminOrderReadService {
                 refund.getOrderId(),
                 order == null ? null : order.getOrderNo(),
                 order == null ? null : order.getStatus(),
-                order == null ? null : statusName(order.getStatus()),
+                order == null ? null : statusName(order.getStatus(), order.getRefundStatus()),
                 refund.getRefundType(),
                 refundTypeName(refund.getRefundType()),
                 refund.getAmount(),
@@ -382,6 +382,21 @@ public class AdminOrderReadServiceImpl implements AdminOrderReadService {
                 .map(OrderStatus::getDescription)
                 .findFirst()
                 .orElse("未知状态");
+    }
+
+    /**
+     * 后台展示文案：全额退款的订单虽落「已取消」，但对运营应显示「已退款」，
+     * 否则财务/客服在订单列表里无法区分「用户主动取消」与「已退款」。
+     *
+     * <p>只影响展示，不改变状态流转（状态机不设「已退款」状态）。
+     */
+    private String statusName(Integer code, Integer refundStatus) {
+        if (Objects.equals(refundStatus, 2)
+                && (Objects.equals(code, OrderStatus.CANCELLED.getCode())
+                || Objects.equals(code, OrderStatus.COMPLETED.getCode()))) {
+            return "已退款";
+        }
+        return statusName(code);
     }
 
     private String fulfillmentTypeName(Integer type) {

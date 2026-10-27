@@ -34,6 +34,7 @@ const filters = reactive({
   merchantId: undefined as number | undefined,
   shopId: undefined as number | undefined,
   status: undefined as number | undefined,
+  refundStatus: undefined as number | undefined,
   keyword: '',
   dateRange: null as string[] | null,
 })
@@ -62,6 +63,8 @@ async function load(): Promise<void> {
         typeof filters.merchantId === 'number' ? filters.merchantId : undefined,
       shopId: typeof filters.shopId === 'number' ? filters.shopId : undefined,
       status: typeof filters.status === 'number' ? filters.status : undefined,
+      refundStatus:
+        typeof filters.refundStatus === 'number' ? filters.refundStatus : undefined,
       keyword: appliedKeyword.value.trim() || undefined,
       dateFrom: range[0],
       dateTo: range[1],
@@ -92,6 +95,7 @@ function reset(): void {
   filters.merchantId = undefined
   filters.shopId = undefined
   filters.status = undefined
+  filters.refundStatus = undefined
   filters.keyword = ''
   appliedKeyword.value = ''
   filters.dateRange = null
@@ -201,6 +205,15 @@ onMounted(load)
             :value="option.value"
           />
         </el-select>
+        <el-select
+          v-model="filters.refundStatus"
+          placeholder="退款状态"
+          clearable
+          class="status-select"
+        >
+          <el-option label="部分退款" :value="1" />
+          <el-option label="已退款" :value="2" />
+        </el-select>
         <el-input
           v-model="filters.keyword"
           placeholder="订单号 / 收货人 / 手机号"
@@ -243,7 +256,7 @@ onMounted(load)
         <el-table-column label="状态" width="110">
           <template #default="{ row }">
             <el-tag :type="orderStatusMeta(row.status).tag" size="small">
-              {{ orderStatusMeta(row.status).label }}
+              {{ row.statusName || orderStatusMeta(row.status).label }}
             </el-tag>
           </template>
         </el-table-column>

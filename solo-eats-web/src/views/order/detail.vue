@@ -85,7 +85,7 @@ onMounted(load)
             <div class="card-header">
               <span class="mono order-no">{{ detail.orderNo }}</span>
               <el-tag :type="orderStatusMeta(detail.status).tag">
-                {{ orderStatusMeta(detail.status).label }}
+                {{ detail.statusName || orderStatusMeta(detail.status).label }}
               </el-tag>
             </div>
           </template>

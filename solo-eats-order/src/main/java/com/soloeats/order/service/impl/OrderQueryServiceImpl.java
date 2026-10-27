@@ -56,6 +56,8 @@ public class OrderQueryServiceImpl implements OrderQueryService {
     private static final int USER_DEFAULT_PAGE_NUM = 1;
     private static final int USER_DEFAULT_PAGE_SIZE = 10;
     private static final int USER_MAX_PAGE_SIZE = 50;
+    /** {@code t_order.refund_status}：0 无退款 / 1 部分退款 / 2 全额退款。 */
+    private static final int ORDER_REFUND_STATUS_FULL = 2;
     private static final Set<Integer> VALID_STATUSES = Arrays.stream(OrderStatus.values())
             .map(OrderStatus::getCode)
             .collect(Collectors.toUnmodifiableSet());
@@ -166,7 +168,7 @@ public class OrderQueryServiceImpl implements OrderQueryService {
                 order.getOrderNo(),
                 order.getShopId(),
                 order.getStatus(),
-                statusName(order.getStatus()),
+                statusName(order.getStatus(), order.getRefundStatus()),
                 order.getFulfillmentType(),
                 fulfillmentTypeName(order.getFulfillmentType()),
                 order.getGoodsAmount(),
@@ -220,7 +222,7 @@ public class OrderQueryServiceImpl implements OrderQueryService {
                 order.getOrderNo(),
                 order.getShopId(),
                 order.getStatus(),
-                statusName(order.getStatus()),
+                statusName(order.getStatus(), order.getRefundStatus()),
                 order.getFulfillmentType(),
                 fulfillmentTypeName(order.getFulfillmentType()),
                 order.getGoodsAmount(),
@@ -333,7 +335,7 @@ public class OrderQueryServiceImpl implements OrderQueryService {
                 order.getOrderNo(),
                 order.getShopId(),
                 order.getStatus(),
-                statusName(order.getStatus()),
+                statusName(order.getStatus(), order.getRefundStatus()),
                 order.getFulfillmentType(),
                 fulfillmentTypeName(order.getFulfillmentType()),
                 order.getGoodsAmount(),
@@ -450,6 +452,9 @@ public class OrderQueryServiceImpl implements OrderQueryService {
         wrapper.eq(query.merchantId() != null, "merchant_id", query.merchantId())
                 .eq(query.shopId() != null, "shop_id", query.shopId())
                 .eq(query.status() != null, "status", query.status())
+                // 退款语义由 refund_status 承载：status=70 同时表示「用户取消」与「已退款」，
+                // 运营需要能单独筛出「已退款」单据（技术架构 3.2 未新增状态码）
+                .eq(query.refundStatus() != null, "refund_status", query.refundStatus())
                 .ge(query.dateFrom() != null, "created_at",
                         query.dateFrom() == null ? null : query.dateFrom().atStartOfDay())
                 .lt(query.dateTo() != null, "created_at",
@@ -508,7 +513,7 @@ public class OrderQueryServiceImpl implements OrderQueryService {
                 order.getMerchantId(),
                 order.getShopId(),
                 order.getStatus(),
-                statusName(order.getStatus()),
+                statusName(order.getStatus(), order.getRefundStatus()),
                 order.getFulfillmentType(),
                 order.getUserId(),
                 order.getGoodsAmount(),
@@ -539,7 +544,7 @@ public class OrderQueryServiceImpl implements OrderQueryService {
                 order.getShopId(),
                 order.getUserId(),
                 order.getStatus(),
-                statusName(order.getStatus()),
+                statusName(order.getStatus(), order.getRefundStatus()),
                 order.getFulfillmentType(),
                 order.getPaymentStatus(),
                 order.getRefundStatus(),
@@ -608,6 +613,27 @@ public class OrderQueryServiceImpl implements OrderQueryService {
                 .map(OrderStatus::getDescription)
                 .findFirst()
                 .orElse("未知状态");
+    }
+
+    /**
+     * 对外展示的状态文案：退款终态语义由 {@code t_order.refund_status} 承载。
+     *
+     * <p>订单状态机不设「已退款」状态（技术架构 3.2 的流转表与
+     * {@code OrderStateMachineTest} 均锁定 {@code REFUND_FULL_SUCCESS → CANCELLED}），
+     * 全额退款后订单仍是「已取消」。若直接下发「已取消」，用户端会把「商家拒单退款」
+     * 看成「自己取消的订单」，客服也无法按状态区分。
+     *
+     * <p>因此展示层做一次纠正：{@code refund_status=2（全额退款）} 且订单处于退款可达的终态
+     * （「已取消」= 未完成即退款、「已完成」= 售后期内退款）时，文案统一为「已退款」。
+     * 这不改变任何状态流转，只影响展示；退款语义的唯一事实来源是 {@code refund_status}。
+     */
+    private String statusName(Integer code, Integer refundStatus) {
+        if (Objects.equals(refundStatus, ORDER_REFUND_STATUS_FULL)
+                && (Objects.equals(code, OrderStatus.CANCELLED.getCode())
+                || Objects.equals(code, OrderStatus.COMPLETED.getCode()))) {
+            return "已退款";
+        }
+        return statusName(code);
     }
 
     private String maskPhone(String phone) {

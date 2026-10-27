@@ -7,7 +7,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.soloeats.common.exception.BizException;
 import com.soloeats.common.exception.ErrorCode;
 import com.soloeats.order.domain.entity.Order;
+import com.soloeats.order.domain.entity.RefundOrder;
 import com.soloeats.order.domain.enums.OrderStatus;
+import com.soloeats.order.domain.enums.RefundStatus;
 import com.soloeats.order.mapper.OrderMapper;
 import com.soloeats.settlement.domain.entity.SettlementBill;
 import com.soloeats.settlement.domain.entity.SettlementItem;
@@ -39,6 +41,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -66,6 +69,8 @@ public class SettlementServiceImpl implements SettlementService {
     public SettlementGenerateResult generateDailyBills() {
         LocalDate billDate = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
+        LocalDateTime periodStart = billDate.atStartOfDay();
+        LocalDateTime periodEnd = billDate.plusDays(1).atStartOfDay();
 
         List<Order> orders = orderMapper.selectList(new LambdaQueryWrapper<Order>()
                 .eq(Order::getStatus, OrderStatus.COMPLETED.getCode())
@@ -76,7 +81,7 @@ public class SettlementServiceImpl implements SettlementService {
                 .le(Order::getSettleEligibleAt, now)
                 .orderByAsc(Order::getId));
 
-        Map<Long, List<Order>> byMerchant = orders.stream()
+        Map<Long, List<Order>> ordersByMerchant = orders.stream()
                 .filter(order -> order.getMerchantId() != null)
                 .collect(Collectors.groupingBy(
                         Order::getMerchantId,
@@ -84,25 +89,66 @@ public class SettlementServiceImpl implements SettlementService {
                         Collectors.toList()
                 ));
 
+        Map<Long, List<RefundOrder>> refundsByMerchant = loadRefundsForSettlement(periodStart, periodEnd);
+
+        // 商家集合取并集：某商家本期可能只有退款冲抵（无新订单），仍须出调整账单
+        Set<Long> merchantIds = new LinkedHashSet<>(ordersByMerchant.keySet());
+        merchantIds.addAll(refundsByMerchant.keySet());
+
         List<Long> billIds = new ArrayList<>();
         int orderCount = 0;
-        for (Map.Entry<Long, List<Order>> entry : byMerchant.entrySet()) {
-            Long merchantId = entry.getKey();
+        for (Long merchantId : merchantIds) {
             if (settlementBillMapper.findByMerchantAndDate(merchantId, billDate) != null) {
                 continue;
             }
+            List<Order> merchantOrders = ordersByMerchant.getOrDefault(merchantId, List.of());
+            List<RefundOrder> merchantRefunds = refundsByMerchant.getOrDefault(merchantId, List.of());
             try {
                 Long billId = transactionTemplate.execute(status ->
-                        generateForMerchant(merchantId, billDate, entry.getValue()));
+                        generateForMerchant(merchantId, billDate, merchantOrders, merchantRefunds));
                 if (billId != null) {
                     billIds.add(billId);
-                    orderCount += entry.getValue().size();
+                    orderCount += merchantOrders.size();
                 }
             } catch (DuplicateKeyException ex) {
                 log.warn("settlement bill already exists merchant={} date={}", merchantId, billDate);
             }
         }
         return new SettlementGenerateResult(billIds.size(), orderCount, billIds);
+    }
+
+    /**
+     * 载入本期需冲抵的退款：成功退款 + 已完成结算的订单（技术架构 3.10.4）。
+     *
+     * <p>未结算就退款的订单本就不会进入账单（{@code refund_status=0} 过滤），无需冲抵；
+     * 只有「已经结算拿过钱、之后才退款」的订单才需要在本期出负项回收资金。
+     */
+    private Map<Long, List<RefundOrder>> loadRefundsForSettlement(LocalDateTime periodStart,
+                                                                  LocalDateTime periodEnd) {
+        List<RefundOrder> refunds = settlementBillMapper.findSettleableRefunds(
+                RefundStatus.SUCCESS.getCode(), periodStart, periodEnd);
+        if (refunds == null || refunds.isEmpty()) {
+            return Map.of();
+        }
+        Set<Long> orderIds = refunds.stream()
+                .map(RefundOrder::getOrderId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Order> orderById = orderMapper.selectBatchIds(orderIds).stream()
+                .collect(Collectors.toMap(Order::getId, order -> order, (a, b) -> a));
+
+        Map<Long, List<RefundOrder>> byMerchant = new LinkedHashMap<>();
+        for (RefundOrder refund : refunds) {
+            Order order = orderById.get(refund.getOrderId());
+            if (order == null || order.getMerchantId() == null) {
+                continue;
+            }
+            byMerchant.computeIfAbsent(order.getMerchantId(), key -> new ArrayList<>()).add(refund);
+        }
+        return byMerchant;
     }
 
     @Scheduled(cron = "${app.settlement.bill-cron:0 0 2 * * ?}")
@@ -329,13 +375,31 @@ public class SettlementServiceImpl implements SettlementService {
         return 0L;
     }
 
-    private Long generateForMerchant(Long merchantId, LocalDate billDate, List<Order> orders) {
+    /**
+     * 生成单个商家的账单。
+     *
+     * <p>金额口径严格按《技术架构与数据库设计说明书》3.10.2：
+     * <pre>
+     * payable = gross_amount - merchant_discount + platform_discount
+     *           - commission_amount - performance_fee - refund_amount
+     * </pre>
+     * 其中 {@code refund_amount} 为本期需冲抵的已结算订单退款（3.10.4），
+     * 另承接上期 {@code carry_forward_amount}；本期应结为负时不扣款，转为下期负项。
+     *
+     * @param orders  本期可入账订单（已过售后期、未结算、未退款）
+     * @param refunds 本期需冲抵的退款（所属订单已完成结算）
+     */
+    private Long generateForMerchant(Long merchantId, LocalDate billDate,
+                                     List<Order> orders, List<RefundOrder> refunds) {
+        if (orders.isEmpty() && refunds.isEmpty()) {
+            return null;
+        }
         long grossAmount = 0L;
         long merchantDiscount = 0L;
         long platformDiscount = 0L;
         long commissionBase = 0L;
         long commissionAmount = 0L;
-        long payableAmount = 0L;
+        long orderPayable = 0L;
         List<OrderAmount> amounts = new ArrayList<>();
         List<Long> orderIds = orders.stream().map(Order::getId).toList();
 
@@ -356,11 +420,46 @@ public class SettlementServiceImpl implements SettlementService {
             platformDiscount += platformDiscountOfOrder;
             commissionBase += base;
             commissionAmount += commission;
-            payableAmount += merchantAmount;
+            orderPayable += merchantAmount;
             amounts.add(new OrderAmount(
                     order, gross, merchantDiscountOfOrder, platformDiscountOfOrder,
                     commission, merchantAmount
             ));
+        }
+
+        // 退款冲抵（3.10.4）：按该订单原本实结给商家的金额回收，保证全额退款后商家该单净额为 0。
+        // 幂等：item_type=4 + source_id=退款单ID 已存在则跳过，避免同一笔退款被多期重复冲抵。
+        long refundAmount = 0L;
+        List<RefundClawback> clawbacks = new ArrayList<>();
+        for (RefundOrder refund : refunds) {
+            if (settlementItemMapper.countByTypeAndSource(4, refund.getId()) > 0) {
+                continue;
+            }
+            long originalSettle = settlementItemMapper.sumOrderSettleAmount(refund.getOrderId());
+            if (originalSettle <= 0L) {
+                // 该订单从未出现在任何账单中，没有可回收的金额
+                continue;
+            }
+            refundAmount += originalSettle;
+            clawbacks.add(new RefundClawback(refund, originalSettle));
+        }
+
+        // 承接上期负项（3.10.2）：账单生成后不可修改，故以 item_type=5 + source_id=上期账单ID 判定是否已承接
+        long carryForwardIn = 0L;
+        SettlementBill previous = settlementBillMapper.findLatestCarryForward(merchantId);
+        if (previous != null
+                && previous.getCarryForwardAmount() != null
+                && previous.getCarryForwardAmount() < 0L
+                && settlementItemMapper.countByTypeAndSource(5, previous.getId()) == 0) {
+            carryForwardIn = previous.getCarryForwardAmount();
+        }
+
+        long payableAmount = orderPayable - refundAmount + carryForwardIn;
+        long carryForwardOut = 0L;
+        if (payableAmount < 0L) {
+            // 本期应结为负：不在本期扣款，转入下期负项
+            carryForwardOut = payableAmount;
+            payableAmount = 0L;
         }
 
         SettlementBill bill = new SettlementBill();
@@ -375,8 +474,8 @@ public class SettlementServiceImpl implements SettlementService {
         bill.setCommissionBase(commissionBase);
         bill.setCommissionAmount(commissionAmount);
         bill.setPerformanceFee(0L);
-        bill.setRefundAmount(0L);
-        bill.setCarryForwardAmount(0L);
+        bill.setRefundAmount(refundAmount);
+        bill.setCarryForwardAmount(carryForwardOut);
         bill.setPayableAmount(payableAmount);
         bill.setStatus(0);
         settlementBillMapper.insert(bill);
@@ -401,16 +500,39 @@ public class SettlementServiceImpl implements SettlementService {
             settlementItemMapper.insert(commissionItem);
         }
 
-        // 抽佣明细回溯账单：账单落库后回填 settlement_bill_id，便于「账单 → 抽佣明细」核对
-        bindCommissionRecords(bill.getId(), orderIds);
+        for (RefundClawback clawback : clawbacks) {
+            SettlementItem refundItem = new SettlementItem();
+            refundItem.setBillId(bill.getId());
+            refundItem.setOrderId(clawback.refund().getOrderId());
+            refundItem.setItemType(4);
+            refundItem.setSourceId(clawback.refund().getId());
+            refundItem.setAmount(-clawback.originalSettle());
+            refundItem.setRemark("refund clawback refundNo=" + clawback.refund().getRefundNo());
+            settlementItemMapper.insert(refundItem);
+        }
 
-        int updated = orderMapper.update(null, new LambdaUpdateWrapper<Order>()
-                .in(Order::getId, orderIds)
-                .eq(Order::getSettlementStatus, 0)
-                .set(Order::getSettlementStatus, 1)
-                .set(Order::getUpdatedAt, LocalDateTime.now()));
-        if (updated != orderIds.size()) {
-            throw new BizException(ErrorCode.SETTLEMENT_STATE_INVALID);
+        if (carryForwardIn != 0L) {
+            SettlementItem carryItem = new SettlementItem();
+            carryItem.setBillId(bill.getId());
+            carryItem.setItemType(5);
+            carryItem.setSourceId(previous.getId());
+            carryItem.setAmount(carryForwardIn);
+            carryItem.setRemark("carry forward from " + previous.getBillNo());
+            settlementItemMapper.insert(carryItem);
+        }
+
+        // 抽佣明细回溯账单：账单落库后回填 settlement_bill_id，便于「账单 → 抽佣明细」核对
+        if (!orderIds.isEmpty()) {
+            bindCommissionRecords(bill.getId(), orderIds);
+
+            int updated = orderMapper.update(null, new LambdaUpdateWrapper<Order>()
+                    .in(Order::getId, orderIds)
+                    .eq(Order::getSettlementStatus, 0)
+                    .set(Order::getSettlementStatus, 1)
+                    .set(Order::getUpdatedAt, LocalDateTime.now()));
+            if (updated != orderIds.size()) {
+                throw new BizException(ErrorCode.SETTLEMENT_STATE_INVALID);
+            }
         }
         return bill.getId();
     }
@@ -498,5 +620,14 @@ public class SettlementServiceImpl implements SettlementService {
             long commission,
             long merchantAmount
     ) {
+    }
+
+    /**
+     * 一笔待冲抵的退款及其冲抵金额。
+     *
+     * @param refund        成功退款单
+     * @param originalSettle 该订单原本实结给商家的金额（商品项 + 佣金项），冲抵时取负值
+     */
+    private record RefundClawback(RefundOrder refund, long originalSettle) {
     }
 }

@@ -35,6 +35,7 @@ public class AdminOrderController {
             @RequestParam(required = false) Long merchantId,
             @RequestParam(required = false) Long shopId,
             @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) Integer refundStatus,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
@@ -43,7 +44,7 @@ public class AdminOrderController {
             @RequestParam(defaultValue = "1") long pageNum,
             @RequestParam(defaultValue = "20") long pageSize) {
         AdminOrderQuery query = new AdminOrderQuery(
-                merchantId, shopId, status, keyword, dateFrom, dateTo, pageNum, pageSize
+                merchantId, shopId, status, refundStatus, keyword, dateFrom, dateTo, pageNum, pageSize
         );
         return ApiResponse.ok(orderQueryService.monitor(query));
     }

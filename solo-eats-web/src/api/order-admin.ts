@@ -13,6 +13,8 @@ export interface AdminOrderMonitorParams {
   merchantId?: number
   shopId?: number
   status?: number
+  /** 订单级退款标识：0 无退款 / 1 部分退款 / 2 全额退款；用于筛出「已退款」单据 */
+  refundStatus?: number
   keyword?: string
   /** yyyy-MM-dd */
   dateFrom?: string
