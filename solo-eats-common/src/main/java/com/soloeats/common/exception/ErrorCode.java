@@ -40,6 +40,11 @@ public enum ErrorCode {
     COUPON_NOT_AVAILABLE(40008, "优惠券不可用", HttpStatus.CONFLICT),
     COUPON_STATE_INVALID(40009, "优惠券状态不一致", HttpStatus.CONFLICT),
 
+    // T12 阶段A 秒杀（402xx 段，40203~40205 与任务卡对齐；40201/40202 留给满减）
+    SECKILL_OUT_OF_STOCK(40203, "秒杀商品已售罄", HttpStatus.CONFLICT),
+    SECKILL_LIMIT_EXCEEDED(40204, "超出限购数量", HttpStatus.CONFLICT),
+    SECKILL_NOT_STARTED(40205, "秒杀活动未开始或已结束", HttpStatus.CONFLICT),
+
     // T12 阶段A-1 券后台管理（402xx 段）
     COUPON_TEMPLATE_NOT_FOUND(40210, "优惠券模板不存在", HttpStatus.NOT_FOUND),
     COUPON_STOCK_NOT_ENOUGH(40211, "优惠券剩余可发数量不足", HttpStatus.CONFLICT),
