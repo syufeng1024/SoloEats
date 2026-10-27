@@ -44,6 +44,7 @@ public enum ErrorCode {
     SECKILL_OUT_OF_STOCK(40203, "秒杀商品已售罄", HttpStatus.CONFLICT),
     SECKILL_LIMIT_EXCEEDED(40204, "超出限购数量", HttpStatus.CONFLICT),
     SECKILL_NOT_STARTED(40205, "秒杀活动未开始或已结束", HttpStatus.CONFLICT),
+    POINT_NOT_ENOUGH(40206, "积分不足", HttpStatus.CONFLICT),
 
     // T12 阶段A-1 券后台管理（402xx 段）
     COUPON_TEMPLATE_NOT_FOUND(40210, "优惠券模板不存在", HttpStatus.NOT_FOUND),

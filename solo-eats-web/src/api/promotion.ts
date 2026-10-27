@@ -228,3 +228,71 @@ export function updateSeckillActivity(
     data: payload,
   })
 }
+
+/** 会员等级后台视图；growthThreshold 为近 365 天成长值门槛 */
+export interface MemberLevelView {
+  id: number
+  levelCode: string
+  levelName: string
+  levelNo: number
+  growthThreshold: number
+  star: number
+  benefitsJson: string | null
+  iconUrl: string | null
+  sort: number
+  status: number
+  createdAt: string
+  updatedAt: string
+}
+
+/** 会员等级新建/编辑入参；status 为空时后端按 0 启用处理 */
+export interface MemberLevelSavePayload {
+  levelCode: string
+  levelName: string
+  levelNo: number
+  growthThreshold: number
+  star: number
+  benefitsJson?: string | null
+  iconUrl?: string | null
+  sort?: number
+  status?: number
+}
+
+/** GET /api/v1/admin/member-levels，权限码 marketing:member:list */
+export function listMemberLevels(): Promise<MemberLevelView[]> {
+  return request<MemberLevelView[]>({
+    url: '/v1/admin/member-levels',
+    method: 'GET',
+  })
+}
+
+/** POST /api/v1/admin/member-levels，返回新等级 id */
+export function createMemberLevel(
+  payload: MemberLevelSavePayload,
+): Promise<number> {
+  return request<number>({
+    url: '/v1/admin/member-levels',
+    method: 'POST',
+    data: payload,
+  })
+}
+
+/** PUT /api/v1/admin/member-levels/{id} */
+export function updateMemberLevel(
+  id: number,
+  payload: MemberLevelSavePayload,
+): Promise<void> {
+  return request<void>({
+    url: `/v1/admin/member-levels/${id}`,
+    method: 'PUT',
+    data: payload,
+  })
+}
+
+/** POST /api/v1/admin/member-levels/recalc，返回实际发生变更的人数 */
+export function recalcMemberLevels(): Promise<number> {
+  return request<number>({
+    url: '/v1/admin/member-levels/recalc',
+    method: 'POST',
+  })
+}
