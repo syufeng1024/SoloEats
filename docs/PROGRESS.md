@@ -2,7 +2,7 @@
 
 > 更新于 2026-10-27 · 判定依据：任务卡执行记录 + 代码实测（非人工估算）
 
-项目按 17 张任务卡（[`docs/tasks/`](tasks/)）推进。**当前阶段：P1 收尾中，T17 运营后台与商家中心页面补齐。**
+项目按 17 张任务卡（[`docs/tasks/`](tasks/)）推进。**当前阶段：P0/P1 必做项已全部完成，仅剩 P2 选做项。**
 
 ## 总览
 
@@ -10,11 +10,11 @@
 |---|---|
 | 任务卡 | 17 张 |
 | 会话单元（阶段） | 约 36 个 |
-| **已完成单元** | **约 33 个（≈92%）** |
+| **已完成单元** | **约 36 个（P0/P1 必做项 100%）** |
 | 后端 Maven 模块 | **16 个（P1 规划的模块已全部建完）** |
-| 数据库迁移 | Flyway V1~V34，约 120 张表 |
-| 后端接口 | 80 个 Controller |
-| 前端页面 | Web 后台 72 页 · 商家中心独立工程 11 页 · 用户端 47 页 · 骑手端 24 页 · 商家端 11 页 |
+| 数据库迁移 | Flyway V1~V35，约 121 张表 |
+| 后端接口 | 81 个 Controller |
+| 前端页面 | Web 后台 72 页 · 商家中心独立工程 13 页 · 用户端 54 页 · 骑手端 24 页 · 商家端 13 页 |
 
 ---
 
@@ -65,11 +65,27 @@
 | T10 内容装修 | **已交付**（5 张表 + 14 端点）；遗留见 T10 执行记录：投放人群 `audience=1/2` 用未登录/已登录近似、`click_count` 无埋点自增接口、首页 P95 未压测 |
 | T11 阶段B | **已交付**（经营/流量/商品/财务报表，`report/` 7 页） |
 | T12 阶段A/B | **已交付**（满减、秒杀、会员等级、积分、签到，`marketing/` 3 页） |
-| T13 阶段B | **已交付**（用户端 47 页：搜索/消息/会员/售后/营销/地址/评价） |
-| T14 阶段B | **已交付**（骑手端 24 页） |
-| T15 阶段B | **已交付**（商家端 11 页，财务/评价/我的） |
+| T13 阶段B | **已交付**（用户端 54 页：搜索/消息/会员/售后/营销/地址/评价/启动/附近/收藏/充值） |
+| T14 阶段B | **已交付**（骑手端 24 页，含任务导航） |
+| T15 阶段B | **已交付**（商家端 13 页，含消息中心） |
 | T16 阶段B | **已交付**（三级抽佣规则引擎 + 资金流水，`finance/` 4 页） |
-| T17 批次1~4 | **运营后台 72 页 + 商家中心 11 页，已基本补齐**；遗留见各批次执行记录（菜单 component 未接入 `/auth/menus` 动态菜单，仅靠静态路由 + 兜底菜单；无 `v-perm` 按钮级权限；少量页面后端接口缺失需回补） |
+| T17 批次1~4 | **运营后台 72 页 + 商家中心 13 页，已补齐**；`v-perm` 按钮级权限指令已落地（示例页 1 处，其余页面渐进接入）；动态菜单机制已接入（`import.meta.glob` + `registerMenuRoutes`） |
+
+### P2 选做项（未做，规格书 1.6 明确标注）
+
+| 项 | 说明 |
+|---|---|
+| 积分商城 | 规格书 241 行 P2 选做；需新建积分商品/兑换订单/发货表 |
+| 商家端营销 | 商家侧发券/满减能力，后端无 merchant 营销接口 |
+| 支付宝沙箱支付 | P1 增强，需独立 payment 沙箱接入卡（`AlipaySandboxGateway`） |
+| 秒杀、拼手气红包、签到/邀请 | 部分已做（签到/邀请/秒杀已交付），其余 P2 |
+
+### 收口遗留（不影响 P0/P1 验收，后续渐进完善）
+
+- `v-perm` 仅接入 1 个示例页，其余后台页面按钮显隐仍靠路由 `meta.roles`（后端 `@RequirePermission` 已全量校验，前端只做体验）
+- 新增页面未全量回填 `t_sys_menu` 菜单种子，部分靠静态路由 + 兜底菜单进入（动态菜单机制已就绪，回填种子即可）
+- `RiderDeliveryView` 收货坐标、`GET /messages/{id}` 等本轮已补，但对应单测未全量覆盖
+- V35 收藏迁移需在真实 MySQL 执行 `flyway migrate` 后生效
 
 ---
 
@@ -82,17 +98,17 @@
 grep -c '<module>' pom.xml                        # 期望 16，P1 规划的模块已全部建完
 
 # 数据库演进到哪一版
-ls solo-eats-app/src/main/resources/db/migration/*.sql | wc -l   # 期望 34（V34）
+ls solo-eats-app/src/main/resources/db/migration/*.sql | wc -l   # 期望 35（V35）
 
 # 接口规模
-ls solo-eats-app/src/main/java/com/soloeats/app/controller/*.java | wc -l   # 期望 80
+ls solo-eats-app/src/main/java/com/soloeats/app/controller/*.java | wc -l   # 期望 81
 
 # 前端页面数
-grep -c '"path"' solo-eats-uniapp-user/src/pages.json      # 47
+grep -c '"path"' solo-eats-uniapp-user/src/pages.json      # 54
 grep -c '"path"' solo-eats-uniapp-rider/src/pages.json     # 24
-grep -c '"path"' solo-eats-uniapp-merchant/src/pages.json  # 11
+grep -c '"path"' solo-eats-uniapp-merchant/src/pages.json  # 13
 find solo-eats-web/src/views -name '*.vue' | wc -l         # 72（运营后台）
-find solo-eats-web-merchant/src/views -name '*.vue' | wc -l # 11（商家中心）
+find solo-eats-web-merchant/src/views -name '*.vue' | wc -l # 13（商家中心）
 
 # 各卡执行记录有无
 grep -n '执行记录' -A 6 docs/tasks/T05-*.md
