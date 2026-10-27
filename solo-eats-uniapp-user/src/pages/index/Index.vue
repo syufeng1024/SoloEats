@@ -215,7 +215,7 @@ function goOrders(): void {
 }
 
 function onSearchTap(): void {
-  uni.showToast({ title: '搜索在阶段B开放，先逛逛附近好店', icon: 'none' })
+  uni.navigateTo({ url: '/pages/search/Search' })
 }
 
 function ratingText(rating: number | null): string {

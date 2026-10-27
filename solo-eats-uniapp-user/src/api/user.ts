@@ -32,7 +32,7 @@ export function fetchAddresses(): Promise<AddressVO[]> {
   return request<AddressVO[]>({ url: '/v1/c/addresses' })
 }
 
-/** GET /c/wallet */
-export function fetchWallet(): Promise<WalletVO> {
-  return request<WalletVO>({ url: '/v1/c/wallet' })
+/** GET /c/wallet。silent 用于「我的」聚合加载，避免多个请求同时失败时连弹 toast。 */
+export function fetchWallet(silent = false): Promise<WalletVO> {
+  return request<WalletVO>({ url: '/v1/c/wallet', silent })
 }

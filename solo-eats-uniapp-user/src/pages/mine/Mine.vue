@@ -1,0 +1,738 @@
+<template>
+  <view class="mine">
+    <view class="mine__header">
+      <view class="mine__avatar">{{ avatarLetter }}</view>
+      <view class="mine__user">
+        <text class="mine__name">{{ displayName }}</text>
+        <view v-if="auth.isLogin" class="mine__member">
+          <text class="mine__level">{{ levelName }}</text>
+          <text v-if="profile" class="mine__growth">成长值 {{ profile.growth }}</text>
+        </view>
+        <text v-else class="mine__hint">登录后查看订单、钱包与会员权益</text>
+      </view>
+      <view v-if="!auth.isLogin" class="mine__login" @click="goLogin">登录/注册</view>
+    </view>
+
+    <view v-if="auth.isLogin && profile" class="mine__progress">
+      <view class="mine__progress-track">
+        <view class="mine__progress-bar" :style="{ width: `${progressPercent}%` }" />
+      </view>
+      <text class="mine__progress-text">{{ progressText }}</text>
+    </view>
+
+    <view v-if="loadError" class="mine__error">
+      <text>{{ loadError }}</text>
+      <text class="mine__error-retry" @click="loadMine">重新加载</text>
+    </view>
+
+    <view class="se-card mine__stats">
+      <view class="mine__stat" @click="openWallet">
+        <text class="mine__stat-value">{{ walletText }}</text>
+        <text class="mine__stat-label">钱包余额</text>
+      </view>
+      <view class="mine__stat" @click="togglePoints">
+        <text class="mine__stat-value">{{ pointText }}</text>
+        <text class="mine__stat-label">积分</text>
+      </view>
+      <view class="mine__stat" @click="handleCheckin">
+        <text class="mine__stat-value" :class="{ 'is-active': checkinStatus?.checkedInToday }">
+          {{ checkinText }}
+        </text>
+        <text class="mine__stat-label">{{ checkinLabel }}</text>
+      </view>
+    </view>
+
+    <view v-if="pointsOpen" class="se-card mine__points">
+      <view class="se-between mine__points-head">
+        <text class="mine__points-title">积分明细</text>
+        <text class="mine__link" @click="loadPointLogs(true)">刷新</text>
+      </view>
+
+      <view v-if="pointLoading && pointLogs.length === 0" class="se-loading">正在加载积分明细…</view>
+
+      <view v-else-if="pointError && pointLogs.length === 0" class="mine__points-state">
+        <text>{{ pointError }}</text>
+        <text class="mine__link" @click="loadPointLogs(true)">重新加载</text>
+      </view>
+
+      <view v-else-if="pointLogs.length === 0" class="mine__points-state">暂无积分变动记录</view>
+
+      <view v-else>
+        <view v-for="log in pointLogs" :key="log.id" class="mine__point-row">
+          <view class="mine__point-main">
+            <text class="mine__point-remark">{{ pointRemark(log) }}</text>
+            <text class="se-muted">{{ formatDateTime(log.createdAt) }}</text>
+          </view>
+          <text class="mine__point-value" :class="{ 'is-out': log.point < 0 }">
+            {{ log.point > 0 ? '+' : '' }}{{ log.point }}
+          </text>
+        </view>
+
+        <view v-if="pointHasMore" class="mine__more" @click="loadPointLogs(false)">
+          {{ pointLoading ? '加载中…' : '加载更多' }}
+        </view>
+      </view>
+    </view>
+
+    <view class="se-card mine__grid">
+      <view class="mine__grid-item" @click="goOrders">
+        <text class="mine__grid-icon">单</text>
+        <text class="mine__grid-text">我的订单</text>
+      </view>
+      <view class="mine__grid-item" @click="openAddress">
+        <text class="mine__grid-icon">址</text>
+        <text class="mine__grid-text">收货地址</text>
+      </view>
+      <view class="mine__grid-item" @click="goTickets">
+        <text class="mine__grid-icon">工</text>
+        <text class="mine__grid-text">我的工单</text>
+      </view>
+      <view class="mine__grid-item is-disabled" @click="openCoupons">
+        <view class="mine__grid-icon-wrap">
+          <text class="mine__grid-icon">券</text>
+          <text class="mine__grid-badge">待开放</text>
+        </view>
+        <text class="mine__grid-text">优惠券</text>
+      </view>
+      <view class="mine__grid-item" @click="goHelp">
+        <text class="mine__grid-icon">帮</text>
+        <text class="mine__grid-text">帮助中心</text>
+      </view>
+      <view class="mine__grid-item" @click="goFeedback">
+        <text class="mine__grid-icon">反</text>
+        <text class="mine__grid-text">意见反馈</text>
+      </view>
+      <view class="mine__grid-item" @click="goSettings">
+        <text class="mine__grid-icon">设</text>
+        <text class="mine__grid-text">设置</text>
+      </view>
+      <view class="mine__grid-item" @click="goAbout">
+        <text class="mine__grid-icon">关</text>
+        <text class="mine__grid-text">关于</text>
+      </view>
+    </view>
+
+    <view class="mine__version">数创星光外卖 · v1.0.0</view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
+import { fetchWallet } from '@/api/user'
+import {
+  checkin,
+  fetchCheckinStatus,
+  fetchMemberProfile,
+  fetchPointAccount,
+  fetchPointLogs,
+} from '@/api/mine'
+import type {
+  CheckinStatusVO,
+  MemberProfileVO,
+  PointAccountVO,
+  PointLogVO,
+} from '@/api/mine'
+import type { WalletVO } from '@/api/types'
+import { fenToYuan } from '@/utils/money'
+import { formatDateTime } from '@/utils/date'
+import { useAuthStore } from '@/stores/auth'
+
+/**
+ * 「我的」聚合页。
+ *
+ * 会员进度：/c/member/profile 返回的是 growth（当前成长值）与 nextThreshold（下一档门槛），
+ * 不是 0~100 的百分比，所以这里按 growth / nextThreshold 自行换算，不用 ×100。
+ * 已达最高档（maxLevel=true）或 nextThreshold<=0 时按 100% 展示。
+ *
+ * 积分入口：本批 8 个页面里没有独立的积分页，点「积分」在页内展开最近明细，
+ * 不新增路由；积分余额与钱包余额分开取，避免把两类资产混在一个接口里。
+ */
+
+const POINT_PAGE_SIZE = 5
+
+const SOURCE_LABELS: Record<number, string> = {
+  1: '下单奖励',
+  2: '签到奖励',
+  3: '评价奖励',
+  4: '邀请奖励',
+  5: '积分兑换',
+  6: '积分过期',
+  7: '手工调整',
+}
+
+const auth = useAuthStore()
+
+const profile = ref<MemberProfileVO | null>(null)
+const wallet = ref<WalletVO | null>(null)
+const points = ref<PointAccountVO | null>(null)
+const checkinStatus = ref<CheckinStatusVO | null>(null)
+const loading = ref(false)
+const loadError = ref('')
+const checking = ref(false)
+
+const pointsOpen = ref(false)
+const pointLogs = ref<PointLogVO[]>([])
+const pointPageNum = ref(0)
+const pointHasMore = ref(false)
+const pointLoading = ref(false)
+const pointError = ref('')
+
+let loadSequence = 0
+
+const displayName = computed(() => {
+  if (!auth.isLogin) {
+    return '未登录'
+  }
+  return auth.nickname || `用户 ${auth.userId ?? ''}`.trim()
+})
+
+const avatarLetter = computed(() => (auth.isLogin ? displayName.value.slice(0, 1) || '数' : '数'))
+
+const levelName = computed(() => profile.value?.levelName || (auth.isLogin ? '普通会员' : ''))
+
+const progressPercent = computed(() => {
+  const current = profile.value
+  if (!current) {
+    return 0
+  }
+  if (current.maxLevel || current.nextThreshold <= 0) {
+    return 100
+  }
+  const percent = Math.round((current.growth / current.nextThreshold) * 100)
+  return Math.max(0, Math.min(100, percent))
+})
+
+const progressText = computed(() => {
+  const current = profile.value
+  if (!current) {
+    return ''
+  }
+  if (current.maxLevel || current.nextThreshold <= 0) {
+    return `已达最高等级 · 成长值 ${current.growth}`
+  }
+  return `成长值 ${current.growth} / ${current.nextThreshold}，距下一等级还差 ${Math.max(0, current.growthToNext)}`
+})
+
+const walletText = computed(() => {
+  if (!auth.isLogin) {
+    return '登录查看'
+  }
+  return wallet.value ? `¥${fenToYuan(wallet.value.balance)}` : '--'
+})
+
+const pointText = computed(() => {
+  if (!auth.isLogin) {
+    return '登录查看'
+  }
+  return points.value ? String(points.value.balance) : '--'
+})
+
+const checkinText = computed(() => {
+  if (!auth.isLogin) {
+    return '登录查看'
+  }
+  const status = checkinStatus.value
+  if (!status) {
+    return '--'
+  }
+  if (status.checkedInToday) {
+    return `${status.continuousDays} 天`
+  }
+  return checking.value ? '签到中…' : '去签到'
+})
+
+const checkinLabel = computed(() => {
+  const status = checkinStatus.value
+  if (status?.checkedInToday) {
+    return '连续签到'
+  }
+  if (status && status.todayPointAward) {
+    return `签到 +${status.todayPointAward} 积分`
+  }
+  return '签到状态'
+})
+
+onShow(() => {
+  loadMine()
+})
+
+async function loadMine(): Promise<void> {
+  if (!auth.isLogin) {
+    // 让退出登录前发出的请求结果失效，避免旧账号数据回填到已登出的页面
+    loadSequence += 1
+    loading.value = false
+    profile.value = null
+    wallet.value = null
+    points.value = null
+    checkinStatus.value = null
+    loadError.value = ''
+    pointsOpen.value = false
+    pointLogs.value = []
+    return
+  }
+  if (loading.value) {
+    return
+  }
+  const sequence = ++loadSequence
+  loading.value = true
+  loadError.value = ''
+  const results = await Promise.allSettled([
+    fetchMemberProfile(true),
+    fetchWallet(true),
+    fetchPointAccount(true),
+    fetchCheckinStatus(true),
+  ])
+  if (sequence !== loadSequence) {
+    loading.value = false
+    return
+  }
+  const [profileResult, walletResult, pointResult, checkinResult] = results
+  if (profileResult.status === 'fulfilled') {
+    profile.value = profileResult.value
+  }
+  if (walletResult.status === 'fulfilled') {
+    wallet.value = walletResult.value
+  }
+  if (pointResult.status === 'fulfilled') {
+    points.value = pointResult.value
+  }
+  if (checkinResult.status === 'fulfilled') {
+    checkinStatus.value = checkinResult.value
+  }
+  // 任一请求失败都提示一次，但不把已有数据清空
+  if (results.some((item) => item.status === 'rejected')) {
+    loadError.value = '部分数据加载失败，可点击重试'
+  }
+  loading.value = false
+}
+
+function goLogin(): void {
+  auth.ensureLogin('/pages/mine/Mine')
+}
+
+function openWallet(): void {
+  if (!auth.ensureLogin('/pages/mine/Mine')) {
+    return
+  }
+  uni.navigateTo({ url: '/pages/mine/Wallet' })
+}
+
+function togglePoints(): void {
+  if (!auth.ensureLogin('/pages/mine/Mine')) {
+    return
+  }
+  pointsOpen.value = !pointsOpen.value
+  if (pointsOpen.value && pointLogs.value.length === 0) {
+    loadPointLogs(true)
+  }
+}
+
+async function loadPointLogs(reset: boolean): Promise<void> {
+  if (pointLoading.value) {
+    return
+  }
+  if (reset) {
+    pointPageNum.value = 0
+  }
+  pointLoading.value = true
+  pointError.value = ''
+  try {
+    const page = await fetchPointLogs(pointPageNum.value + 1, POINT_PAGE_SIZE, true)
+    pointLogs.value = reset ? page.list : pointLogs.value.concat(page.list)
+    pointPageNum.value = page.pageNum
+    pointHasMore.value = pointLogs.value.length < page.total
+  } catch (err) {
+    // 保留上一次已有明细，只展示错误
+    pointError.value = (err as Error)?.message || '积分明细加载失败'
+  } finally {
+    pointLoading.value = false
+  }
+}
+
+async function handleCheckin(): Promise<void> {
+  if (!auth.ensureLogin('/pages/mine/Mine')) {
+    return
+  }
+  if (checking.value) {
+    return
+  }
+  const status = checkinStatus.value
+  if (status?.checkedInToday) {
+    uni.showToast({ title: `今日已签到，连续 ${status.continuousDays} 天`, icon: 'none' })
+    return
+  }
+  checking.value = true
+  try {
+    const result = await checkin()
+    uni.showToast({ title: `签到成功 +${result.pointAward} 积分`, icon: 'none' })
+    checkinStatus.value = {
+      userId: auth.userId ?? 0,
+      today: result.checkinDate,
+      checkedInToday: true,
+      continuousDays: result.continuousDays,
+      todayPointAward: result.pointAward,
+      lastCheckinDate: result.checkinDate,
+      monthCompensationsUsed: status?.monthCompensationsUsed ?? 0,
+      monthCompensationLimit: status?.monthCompensationLimit ?? 0,
+      compensableFrom: status?.compensableFrom ?? null,
+      compensableTo: status?.compensableTo ?? null,
+    }
+    // 签到同时发积分与成长值，刷新两个展示口
+    const [account, member] = await Promise.allSettled([
+      fetchPointAccount(true),
+      fetchMemberProfile(true),
+    ])
+    if (account.status === 'fulfilled') {
+      points.value = account.value
+    }
+    if (member.status === 'fulfilled') {
+      profile.value = member.value
+    }
+    if (pointsOpen.value) {
+      loadPointLogs(true)
+    }
+  } catch (err) {
+    // 40207「今日已签到」等业务错误由 http 层统一 toast
+  } finally {
+    checking.value = false
+  }
+}
+
+function goOrders(): void {
+  if (!auth.ensureLogin('/pages/mine/Mine')) {
+    return
+  }
+  uni.switchTab({ url: '/pages/order/List' })
+}
+
+function openAddress(): void {
+  // 本批 8 个页面未包含地址管理页，先给出明确提示，避免点了没反应
+  uni.showToast({ title: '地址管理待开放，可在下单页选择收货地址', icon: 'none' })
+}
+
+function goTickets(): void {
+  if (!auth.ensureLogin('/pages/mine/Mine')) {
+    return
+  }
+  uni.navigateTo({ url: '/pages/mine/Tickets' })
+}
+
+function openCoupons(): void {
+  uni.showToast({ title: '优惠券功能待开放', icon: 'none' })
+}
+
+function goHelp(): void {
+  uni.navigateTo({ url: '/pages/mine/Help' })
+}
+
+function goFeedback(): void {
+  if (!auth.ensureLogin('/pages/mine/Mine')) {
+    return
+  }
+  uni.navigateTo({ url: '/pages/mine/Feedback' })
+}
+
+function goSettings(): void {
+  uni.navigateTo({ url: '/pages/mine/Settings' })
+}
+
+function goAbout(): void {
+  uni.navigateTo({ url: '/pages/mine/About' })
+}
+
+function pointRemark(log: PointLogVO): string {
+  return log.remark || SOURCE_LABELS[log.source] || '积分变动'
+}
+</script>
+
+<style scoped>
+.mine {
+  min-height: 100vh;
+  padding: 24rpx 24rpx 40rpx;
+  background: linear-gradient(180deg, #fff3e6 0%, #f5f5f7 320rpx);
+}
+
+.mine__header {
+  display: flex;
+  align-items: center;
+  padding: 24rpx 8rpx 16rpx;
+}
+
+.mine__avatar {
+  width: 120rpx;
+  height: 120rpx;
+  line-height: 120rpx;
+  text-align: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffa24c, #ff7a00);
+  color: #ffffff;
+  font-size: 48rpx;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.mine__user {
+  flex: 1;
+  min-width: 0;
+  margin-left: 24rpx;
+  display: flex;
+  flex-direction: column;
+}
+
+.mine__name {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #1f1f1f;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mine__member {
+  display: flex;
+  align-items: center;
+  margin-top: 8rpx;
+  gap: 12rpx;
+}
+
+.mine__level {
+  padding: 4rpx 14rpx;
+  border-radius: 20rpx;
+  background-color: #fff2e6;
+  color: #ff7a00;
+  font-size: 22rpx;
+}
+
+.mine__growth {
+  color: #8a8a8a;
+  font-size: 22rpx;
+}
+
+.mine__hint {
+  margin-top: 8rpx;
+  color: #8a8a8a;
+  font-size: 24rpx;
+}
+
+.mine__login {
+  padding: 14rpx 28rpx;
+  border-radius: 32rpx;
+  background: linear-gradient(135deg, #ffa24c, #ff7a00);
+  color: #ffffff;
+  font-size: 26rpx;
+  flex-shrink: 0;
+}
+
+.mine__progress {
+  padding: 0 8rpx 20rpx;
+}
+
+.mine__progress-track {
+  height: 10rpx;
+  border-radius: 5rpx;
+  background-color: rgba(255, 122, 0, 0.15);
+  overflow: hidden;
+}
+
+.mine__progress-bar {
+  height: 10rpx;
+  border-radius: 5rpx;
+  background: linear-gradient(90deg, #ffa24c, #ff7a00);
+  transition: width 0.3s ease;
+}
+
+.mine__progress-text {
+  display: block;
+  margin-top: 10rpx;
+  color: #a26a2a;
+  font-size: 22rpx;
+}
+
+.mine__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+  padding: 14rpx 20rpx;
+  border-radius: 8rpx;
+  background-color: #fff8ef;
+  color: #a26a2a;
+  font-size: 22rpx;
+}
+
+.mine__error-retry {
+  color: #ff7a00;
+}
+
+.mine__stats {
+  display: flex;
+  padding: 28rpx 0;
+}
+
+.mine__stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-right: 1rpx solid #f2f2f4;
+}
+
+.mine__stat:last-child {
+  border-right: none;
+}
+
+.mine__stat-value {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #1f1f1f;
+}
+
+.mine__stat-value.is-active {
+  color: #ff7a00;
+}
+
+.mine__stat-label {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #8a8a8a;
+}
+
+.mine__points {
+  margin-top: 16rpx;
+  padding: 20rpx 24rpx;
+}
+
+.mine__points-head {
+  padding-bottom: 12rpx;
+  border-bottom: 1rpx solid #f5f5f5;
+}
+
+.mine__points-title {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.mine__link {
+  color: #ff7a00;
+  font-size: 24rpx;
+}
+
+.mine__points-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 32rpx 0;
+  color: #8a8a8a;
+  font-size: 24rpx;
+}
+
+.mine__point-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #f5f5f5;
+}
+
+.mine__point-row:last-child {
+  border-bottom: none;
+}
+
+.mine__point-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.mine__point-remark {
+  font-size: 26rpx;
+  color: #444444;
+}
+
+.mine__point-value {
+  margin-left: 16rpx;
+  color: #52c41a;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.mine__point-value.is-out {
+  color: #ff4d4f;
+}
+
+.mine__more {
+  padding: 20rpx 0 4rpx;
+  text-align: center;
+  color: #ff7a00;
+  font-size: 24rpx;
+}
+
+.mine__grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 16rpx;
+  padding: 28rpx 0 8rpx;
+}
+
+.mine__grid-item {
+  width: 25%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 24rpx;
+}
+
+.mine__grid-item.is-disabled .mine__grid-icon {
+  background-color: #f0f0f0;
+  color: #a0a0a0;
+}
+
+.mine__grid-item.is-disabled .mine__grid-text {
+  color: #a0a0a0;
+}
+
+.mine__grid-icon-wrap {
+  position: relative;
+}
+
+.mine__grid-icon {
+  width: 76rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  text-align: center;
+  border-radius: 22rpx;
+  background-color: #fff2e6;
+  color: #ff7a00;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.mine__grid-badge {
+  position: absolute;
+  top: -10rpx;
+  right: -34rpx;
+  padding: 0 8rpx;
+  border-radius: 8rpx;
+  background-color: #ff4d4f;
+  color: #ffffff;
+  font-size: 18rpx;
+  line-height: 28rpx;
+  white-space: nowrap;
+}
+
+.mine__grid-text {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #444444;
+}
+
+.mine__version {
+  padding: 24rpx 0;
+  text-align: center;
+  color: #b0b0b0;
+  font-size: 20rpx;
+}
+</style>

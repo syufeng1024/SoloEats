@@ -123,6 +123,57 @@
       "style": {
         "navigationBarTitleText": "消息设置"
       }
+    },
+    {
+      "path": "pages/mine/Mine",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    },
+    {
+      "path": "pages/mine/Settings",
+      "style": {
+        "navigationBarTitleText": "设置"
+      }
+    },
+    {
+      "path": "pages/mine/About",
+      "style": {
+        "navigationBarTitleText": "关于"
+      }
+    },
+    {
+      "path": "pages/mine/Help",
+      "style": {
+        "navigationBarTitleText": "帮助中心",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/mine/Tickets",
+      "style": {
+        "navigationBarTitleText": "我的工单",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/mine/TicketDetail",
+      "style": {
+        "navigationBarTitleText": "工单详情"
+      }
+    },
+    {
+      "path": "pages/mine/Feedback",
+      "style": {
+        "navigationBarTitleText": "意见反馈"
+      }
+    },
+    {
+      "path": "pages/mine/Wallet",
+      "style": {
+        "navigationBarTitleText": "我的钱包",
+        "enablePullDownRefresh": true
+      }
     }
   ],
   "globalStyle": {
@@ -144,6 +195,10 @@
       {
         "pagePath": "pages/order/List",
         "text": "订单"
+      },
+      {
+        "pagePath": "pages/mine/Mine",
+        "text": "我的"
       }
     ]
   }

@@ -145,7 +145,7 @@ async function handleLogin(): Promise<void> {
   }
 }
 
-const TAB_PAGES = ['/pages/index/Index', '/pages/order/List']
+const TAB_PAGES = ['/pages/index/Index', '/pages/order/List', '/pages/mine/Mine']
 
 function navigateAfterLogin(): void {
   const target = redirect
