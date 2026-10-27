@@ -271,6 +271,13 @@
       }
     },
     {
+      "path": "pages/mine/Favorites",
+      "style": {
+        "navigationBarTitleText": "我的收藏",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
       "path": "pages/member/Member",
       "style": {
         "navigationBarTitleText": "会员中心"

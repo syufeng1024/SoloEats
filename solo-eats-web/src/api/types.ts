@@ -30,6 +30,8 @@ export interface LoginResponse {
   tokenType: string
   expiresIn: number
   roles: string[]
+  /** 账号密码登录返回的权限码；旧契约模拟登录返回空数组 */
+  permissions: string[]
 }
 
 /** MenuNode.java，后端菜单树节点；menuType 1目录 2菜单 3按钮 */

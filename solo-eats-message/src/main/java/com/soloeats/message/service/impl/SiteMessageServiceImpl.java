@@ -108,6 +108,24 @@ public class SiteMessageServiceImpl implements SiteMessageService {
     }
 
     @Override
+    public SiteMessageView detail(Long id, Integer receiverType, Long receiverId) {
+        requireReceiver(receiverType, receiverId);
+        if (id == null || id <= 0L) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "站内信ID必须是正整数");
+        }
+        SiteMessage message = siteMessageMapper.selectById(id);
+        if (message == null) {
+            throw new BizException(ErrorCode.RESOURCE_NOT_FOUND, "站内信不存在");
+        }
+        // 先按 receiver 归属校验，再返回正文；不允许只凭主键读到他人消息。
+        if (!Objects.equals(message.getReceiverType(), receiverType)
+                || !Objects.equals(message.getReceiverId(), receiverId)) {
+            throw new BizException(ErrorCode.AUTH_FORBIDDEN);
+        }
+        return SiteMessageView.from(message);
+    }
+
+    @Override
     public UnreadCountView unreadCount(Integer receiverType, Long receiverId) {
         requireReceiver(receiverType, receiverId);
         List<UnreadCountRow> rows = siteMessageMapper.countUnreadByType(receiverType, receiverId);

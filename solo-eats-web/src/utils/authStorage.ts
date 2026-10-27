@@ -5,6 +5,11 @@ export interface PersistedAuth {
   tokenType: string
   expiresAt: number
   roles: string[]
+  /**
+   * 登录响应里的权限码。旧版登录响应没有该字段，读取时按空数组处理；
+   * 为空时 v-perm 回退到 /auth/menus 的按钮节点（见 directives/permission.ts）。
+   */
+  permissions?: string[]
   userId?: number | null
   merchantId?: number | null
   shopId?: number | null

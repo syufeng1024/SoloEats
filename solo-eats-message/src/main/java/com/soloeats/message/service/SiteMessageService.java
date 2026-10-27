@@ -14,6 +14,9 @@ public interface SiteMessageService {
     PageResult<SiteMessageView> page(Integer receiverType, Long receiverId,
                                      SiteMessageQuery query, long pageNum, long pageSize);
 
+    /** 单条详情；非本人消息抛 AUTH_FORBIDDEN(10004)，不存在抛 RESOURCE_NOT_FOUND。 */
+    SiteMessageView detail(Long id, Integer receiverType, Long receiverId);
+
     UnreadCountView unreadCount(Integer receiverType, Long receiverId);
 
     /** 非本人消息抛 AUTH_FORBIDDEN(10004)；已读消息幂等返回。 */

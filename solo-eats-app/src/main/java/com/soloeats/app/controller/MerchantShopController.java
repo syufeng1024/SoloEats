@@ -55,6 +55,14 @@ public class MerchantShopController {
                 permissionGuard.requireMerchantId(), operatorShopId()));
     }
 
+    /** 门店详情；门店必须属于当前商家，门店账号还必须是本店。 */
+    @GetMapping("/{id}")
+    public ApiResponse<ShopDetailView> detail(@PathVariable("id") Long id) {
+        Long merchantId = permissionGuard.requireMerchantId();
+        shopService.assertMerchantShop(id, merchantId, operatorShopId());
+        return ApiResponse.ok(shopService.detail(id));
+    }
+
     @Idempotent(ttlSeconds = 5)
     @OperationLog(module = "门店管理", action = "商家建店")
     @PostMapping

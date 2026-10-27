@@ -50,6 +50,16 @@ public class AdminSpuController {
         return ApiResponse.ok(spuService.create(toCommand(request)));
     }
 
+    /**
+     * 管理端编辑回显。不限制商品状态，草稿/待审/下架均可读取；
+     * 与用户端 GET /c/spus/{id}（仅上架可见）区分。
+     */
+    @RequirePermission("product:spu:list")
+    @GetMapping("/{id}")
+    public ApiResponse<SpuView> detail(@PathVariable("id") Long id) {
+        return ApiResponse.ok(spuService.adminDetail(id));
+    }
+
     @RequirePermission("product:spu:update")
     @OperationLog(module = "商品管理", action = "编辑商品")
     @PutMapping("/{id}")

@@ -53,6 +53,13 @@ public class AdminShopController {
                 merchantId, status, city, keyword, pageNum, pageSize));
     }
 
+    /** 管理端编辑回显，返回含营业时段与自取配置的完整门店详情。 */
+    @RequirePermission("store:shop:list")
+    @GetMapping("/{id}")
+    public ApiResponse<ShopDetailView> detail(@PathVariable("id") Long id) {
+        return ApiResponse.ok(shopService.detail(id));
+    }
+
     @RequirePermission("store:shop:create")
     @Idempotent(ttlSeconds = 5)
     @OperationLog(module = "门店管理", action = "新增门店")

@@ -84,13 +84,10 @@ export function updateShopStatus(id: number, status: number): Promise<void> {
   })
 }
 
-/**
- * 管理端没有 GET /admin/shops/{id}，详情读取用户端公开接口
- * GET /api/v1/c/shops/{id}（ShopClientController，无角色限制）。
- */
+/** GET /api/v1/admin/shops/{id}，权限码 store:shop:list，用于管理端编辑回显。 */
 export function getShopDetail(id: number): Promise<ShopDetailView> {
   return request<ShopDetailView>({
-    url: `/v1/c/shops/${id}`,
+    url: `/v1/admin/shops/${id}`,
     method: 'GET',
   })
 }

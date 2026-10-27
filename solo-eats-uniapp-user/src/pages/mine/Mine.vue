@@ -63,6 +63,10 @@
         <text class="mine__grid-icon">评</text>
         <text class="mine__grid-text">我的评价</text>
       </view>
+      <view class="mine__grid-item" @click="goFavorites">
+        <text class="mine__grid-icon">藏</text>
+        <text class="mine__grid-text">我的收藏</text>
+      </view>
       <view class="mine__grid-item" @click="goAfterSale">
         <text class="mine__grid-icon">售</text>
         <text class="mine__grid-text">售后记录</text>
@@ -313,6 +317,13 @@ function goReviews(): void {
     return
   }
   uni.navigateTo({ url: '/pages/review/List' })
+}
+
+function goFavorites(): void {
+  if (!auth.ensureLogin('/pages/mine/Mine')) {
+    return
+  }
+  uni.navigateTo({ url: '/pages/mine/Favorites' })
 }
 
 function goAfterSale(): void {

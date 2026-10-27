@@ -19,6 +19,8 @@ export const useAuthStore = defineStore('auth', () => {
     () => session.value !== null && !isAuthExpired(session.value),
   )
   const roles = computed(() => session.value?.roles ?? [])
+  /** 登录响应下发的权限码；旧会话/模拟登录为空，v-perm 会回退到菜单按钮权限。 */
+  const permissions = computed(() => session.value?.permissions ?? [])
   const primaryRole = computed(() => roles.value[0] ?? '')
   const merchantId = computed(() => session.value?.merchantId ?? null)
   const shopId = computed(() => session.value?.shopId ?? null)
@@ -30,6 +32,7 @@ export const useAuthStore = defineStore('auth', () => {
       tokenType: response.tokenType,
       expiresAt: Date.now() + response.expiresIn * 1000,
       roles: response.roles,
+      permissions: response.permissions ?? [],
       userId: payload.userId ?? null,
       merchantId: payload.merchantId ?? null,
       shopId: payload.shopId ?? null,
@@ -54,6 +57,7 @@ export const useAuthStore = defineStore('auth', () => {
     session,
     isAuthenticated,
     roles,
+    permissions,
     primaryRole,
     merchantId,
     shopId,

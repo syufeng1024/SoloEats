@@ -38,6 +38,14 @@
           <text class="shop__link" @click="goShopInfo">店铺信息</text>
           <text class="shop__link-sep">|</text>
           <text class="shop__link" @click="goShopReviews">店铺评价</text>
+          <text class="shop__link-sep">|</text>
+          <text
+            class="shop__link"
+            :class="{ 'is-active': favorited }"
+            @click="toggleFavorite"
+          >
+            {{ favorited ? '★ 已收藏' : '☆ 收藏' }}
+          </text>
         </view>
       </view>
 
@@ -139,12 +147,20 @@
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import SkuPopup from '@/pages/shop/SkuPopup.vue'
+import {
+  FAVORITE_TYPE_SHOP,
+  addFavorite,
+  fetchFavorites,
+  removeFavorite,
+} from '@/api/favorite'
 import { fetchShopDetail, fetchShopMenu } from '@/api/shop'
 import type { ShopDetailVO, ShopMenuVO, SpuVO } from '@/api/types'
 import { fenToYuan } from '@/utils/money'
+import { useAuthStore } from '@/stores/auth'
 import { useCartStore, type CartLine } from '@/stores/cart'
 
 const cart = useCartStore()
+const auth = useAuthStore()
 
 const shopId = ref(0)
 const shop = ref<ShopDetailVO | null>(null)
@@ -155,6 +171,8 @@ const activeCategory = ref(0)
 const scrollInto = ref('')
 const popupVisible = ref(false)
 const activeItem = ref<SpuVO | null>(null)
+const favorited = ref(false)
+const favoriteBusy = ref(false)
 
 const cartCount = computed(() => cart.totalCount(shopId.value))
 const cartAmount = computed(() => cart.totalAmount(shopId.value))
@@ -197,10 +215,56 @@ async function load(): Promise<void> {
     // 空分类不渲染，避免左侧出现点不开的目录项
     menu.value = categories.filter((category) => (category.items?.length || 0) > 0)
     activeCategory.value = 0
+    void loadFavoriteState()
   } catch (err) {
     error.value = (err as Error)?.message || '门店加载失败'
   } finally {
     loading.value = false
+  }
+}
+
+/** 收藏状态只查当前门店一条；未登录或请求失败时按未收藏展示，不打断点餐。 */
+async function loadFavoriteState(): Promise<void> {
+  if (!auth.isLogin || !shopId.value) {
+    favorited.value = false
+    return
+  }
+  try {
+    const page = await fetchFavorites({
+      targetType: FAVORITE_TYPE_SHOP,
+      targetId: shopId.value,
+      pageNum: 1,
+      pageSize: 1,
+      silent: true,
+    })
+    favorited.value = page.total > 0 || page.list.length > 0
+  } catch {
+    favorited.value = false
+  }
+}
+
+async function toggleFavorite(): Promise<void> {
+  if (!shopId.value || favoriteBusy.value) {
+    return
+  }
+  if (!auth.ensureLogin(`/pages/shop/Shop?id=${shopId.value}`)) {
+    return
+  }
+  favoriteBusy.value = true
+  try {
+    if (favorited.value) {
+      await removeFavorite(FAVORITE_TYPE_SHOP, shopId.value)
+      favorited.value = false
+      uni.showToast({ title: '已取消收藏', icon: 'none' })
+      return
+    }
+    await addFavorite(FAVORITE_TYPE_SHOP, shopId.value)
+    favorited.value = true
+    uni.showToast({ title: '已收藏门店', icon: 'none' })
+  } catch {
+    // 错误提示由 http 层统一 toast
+  } finally {
+    favoriteBusy.value = false
   }
 }
 
@@ -366,6 +430,10 @@ function goCheckout(): void {
 .shop__link {
   font-size: 22rpx;
   color: #ff7a00;
+}
+
+.shop__link.is-active {
+  color: #ff4d4f;
 }
 
 .shop__link-sep {

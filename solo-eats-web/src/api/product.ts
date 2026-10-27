@@ -39,6 +39,14 @@ export function listSpus(params: AdminSpuListParams): Promise<PageResult<SpuView
   })
 }
 
+/** GET /api/v1/admin/spus/{id}，权限码 product:spu:list。不限制商品状态，用于编辑回显。 */
+export function getSpu(id: number): Promise<SpuView> {
+  return request<SpuView>({
+    url: `/v1/admin/spus/${id}`,
+    method: 'GET',
+  })
+}
+
 /** GET /api/v1/admin/categories/tree，权限码 product:category:list */
 export function getCategoryTree(): Promise<CategoryNode[]> {
   return request<CategoryNode[]>({

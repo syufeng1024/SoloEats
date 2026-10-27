@@ -6,7 +6,7 @@ import { ArrowLeft } from '@element-plus/icons-vue'
 import {
   createSpu,
   getCategoryTree,
-  listSpus,
+  getSpu,
   updateSpu,
   type AdminSpuSavePayload,
 } from '@/api/product'
@@ -133,27 +133,12 @@ function applySpu(spu: {
   form.sortWeight = spu.sortWeight
 }
 
-/**
- * 管理端没有 GET /admin/spus/{id}。
- * 列表路由跳转时带上商品名，用关键字命中后按 id 过滤，避免遍历所有分页。
- */
+/** 管理端编辑回显走 GET /admin/spus/{id}，草稿/待审/下架商品同样可读。 */
 async function loadForEdit(id: number): Promise<void> {
   loading.value = true
   loadError.value = ''
   try {
-    const nameQuery = route.query.name
-    const keyword = typeof nameQuery === 'string' ? nameQuery.trim() : ''
-    const result = await listSpus({
-      keyword: keyword || undefined,
-      pageNum: 1,
-      pageSize: 100,
-    })
-    const target = result.list.find((item) => item.id === id)
-    if (!target) {
-      loadError.value = `未命中商品 #${id}。管理端未提供单条详情接口，请从商品库列表重新进入编辑。`
-      return
-    }
-    applySpu(target)
+    applySpu(await getSpu(id))
   } catch (error) {
     loadError.value = errorMessage(error, '商品详情加载失败')
   } finally {

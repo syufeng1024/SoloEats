@@ -523,7 +523,14 @@ onMounted(() => {
       </div>
       <div class="toolbar">
         <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
-        <el-button type="primary" :icon="Plus" @click="openCreate">新建用户</el-button>
+        <el-button
+          v-perm="'system:user:create'"
+          type="primary"
+          :icon="Plus"
+          @click="openCreate"
+        >
+          新建用户
+        </el-button>
       </div>
     </div>
 

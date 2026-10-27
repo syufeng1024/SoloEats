@@ -3,6 +3,8 @@ package com.soloeats.app.controller;
 import com.soloeats.app.security.CurrentReceiver;
 import com.soloeats.common.api.ApiResponse;
 import com.soloeats.common.api.PageResult;
+import com.soloeats.common.auth.RequireRole;
+import com.soloeats.common.auth.Roles;
 import com.soloeats.common.auth.UserPrincipal;
 import com.soloeats.message.service.SiteMessageService;
 import com.soloeats.message.service.query.SiteMessageQuery;
@@ -42,6 +44,18 @@ public class MessageController {
                 new SiteMessageQuery(msgType, readFlag),
                 pageNum,
                 pageSize));
+    }
+
+    /**
+     * 站内信详情。receiverType/receiverId 与 markRead 同一口径，
+     * 非本人消息由 service 抛 10004，不接受前端传 receiver 参数。
+     */
+    @RequireRole({Roles.C_USER, Roles.MERCHANT, Roles.RIDER, Roles.ADMIN})
+    @GetMapping("/{id}")
+    public ApiResponse<SiteMessageView> detail(@PathVariable("id") Long id) {
+        UserPrincipal principal = currentReceiver.principal();
+        return ApiResponse.ok(siteMessageService.detail(id,
+                currentReceiver.receiverType(principal), currentReceiver.receiverId(principal)));
     }
 
     @GetMapping("/unread-count")

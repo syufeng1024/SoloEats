@@ -19,6 +19,11 @@ public interface SpuService {
     void updateStatus(Long id, Integer status);
 
     /**
+     * 管理端编辑回显：按主键返回 SPU，不限制 status（草稿/待审/下架都要能回显）。
+     */
+    SpuView adminDetail(Long spuId);
+
+    /**
      * 商家可用商品库：平台公共（merchant_id IS NULL）+ 本商家私有，且已上架。
      */
     List<SpuView> merchantLibrary(Long merchantId, Long categoryId, String keyword);

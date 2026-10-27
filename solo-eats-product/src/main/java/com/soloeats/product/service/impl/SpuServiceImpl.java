@@ -148,6 +148,11 @@ public class SpuServiceImpl implements SpuService {
     }
 
     @Override
+    public SpuView adminDetail(Long spuId) {
+        return toView(requireSpu(spuId));
+    }
+
+    @Override
     public List<SpuView> merchantLibrary(Long merchantId, Long categoryId, String keyword) {
         if (merchantId == null || merchantId <= 0L) {
             throw new BizException(ErrorCode.PARAM_INVALID, "merchantId 不能为空");

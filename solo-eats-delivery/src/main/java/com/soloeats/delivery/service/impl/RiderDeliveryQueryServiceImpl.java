@@ -79,6 +79,9 @@ public class RiderDeliveryQueryServiceImpl implements RiderDeliveryQueryService 
                 // t_delivery_order 无收货人姓名字段
                 null,
                 delivery.getReceiverAddress(),
+                // 实体映射已覆盖 receiver_lng / receiver_lat，MP 默认查询会带出这两列
+                delivery.getReceiverLng(),
+                delivery.getReceiverLat(),
                 // t_delivery_order 无收货人手机号字段，不额外新增列
                 null,
                 delivery.getDistanceM(),
