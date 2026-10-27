@@ -30,11 +30,11 @@
         <text class="mine__stat-value">{{ walletText }}</text>
         <text class="mine__stat-label">钱包余额</text>
       </view>
-      <view class="mine__stat" @click="togglePoints">
+      <view class="mine__stat" @click="goPoints">
         <text class="mine__stat-value">{{ pointText }}</text>
         <text class="mine__stat-label">积分</text>
       </view>
-      <view class="mine__stat" @click="handleCheckin">
+      <view class="mine__stat" @click="goCheckin">
         <text class="mine__stat-value" :class="{ 'is-active': checkinStatus?.checkedInToday }">
           {{ checkinText }}
         </text>
@@ -42,39 +42,15 @@
       </view>
     </view>
 
-    <view v-if="pointsOpen" class="se-card mine__points">
-      <view class="se-between mine__points-head">
-        <text class="mine__points-title">积分明细</text>
-        <text class="mine__link" @click="loadPointLogs(true)">刷新</text>
-      </view>
-
-      <view v-if="pointLoading && pointLogs.length === 0" class="se-loading">正在加载积分明细…</view>
-
-      <view v-else-if="pointError && pointLogs.length === 0" class="mine__points-state">
-        <text>{{ pointError }}</text>
-        <text class="mine__link" @click="loadPointLogs(true)">重新加载</text>
-      </view>
-
-      <view v-else-if="pointLogs.length === 0" class="mine__points-state">暂无积分变动记录</view>
-
-      <view v-else>
-        <view v-for="log in pointLogs" :key="log.id" class="mine__point-row">
-          <view class="mine__point-main">
-            <text class="mine__point-remark">{{ pointRemark(log) }}</text>
-            <text class="se-muted">{{ formatDateTime(log.createdAt) }}</text>
-          </view>
-          <text class="mine__point-value" :class="{ 'is-out': log.point < 0 }">
-            {{ log.point > 0 ? '+' : '' }}{{ log.point }}
-          </text>
-        </view>
-
-        <view v-if="pointHasMore" class="mine__more" @click="loadPointLogs(false)">
-          {{ pointLoading ? '加载中…' : '加载更多' }}
-        </view>
-      </view>
-    </view>
-
     <view class="se-card mine__grid">
+      <view class="mine__grid-item" @click="goMember">
+        <text class="mine__grid-icon">会</text>
+        <text class="mine__grid-text">会员中心</text>
+      </view>
+      <view class="mine__grid-item" @click="goMarketing">
+        <text class="mine__grid-icon">活</text>
+        <text class="mine__grid-text">活动中心</text>
+      </view>
       <view class="mine__grid-item" @click="goOrders">
         <text class="mine__grid-icon">单</text>
         <text class="mine__grid-text">我的订单</text>
@@ -129,21 +105,13 @@ import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { fetchWallet } from '@/api/user'
 import {
-  checkin,
   fetchCheckinStatus,
   fetchMemberProfile,
   fetchPointAccount,
-  fetchPointLogs,
 } from '@/api/mine'
-import type {
-  CheckinStatusVO,
-  MemberProfileVO,
-  PointAccountVO,
-  PointLogVO,
-} from '@/api/mine'
+import type { CheckinStatusVO, MemberProfileVO, PointAccountVO } from '@/api/mine'
 import type { WalletVO } from '@/api/types'
 import { fenToYuan } from '@/utils/money'
-import { formatDateTime } from '@/utils/date'
 import { useAuthStore } from '@/stores/auth'
 
 /**
@@ -153,21 +121,9 @@ import { useAuthStore } from '@/stores/auth'
  * 不是 0~100 的百分比，所以这里按 growth / nextThreshold 自行换算，不用 ×100。
  * 已达最高档（maxLevel=true）或 nextThreshold<=0 时按 100% 展示。
  *
- * 积分入口：本批 8 个页面里没有独立的积分页，点「积分」在页内展开最近明细，
- * 不新增路由；积分余额与钱包余额分开取，避免把两类资产混在一个接口里。
+ * 积分与签到入口跳转到本批新增的独立页面（/pages/member/Points、/pages/member/Checkin），
+ * 页内不再展开积分明细；顶部统计仍只读余额与签到状态，保持「我的」首屏轻量。
  */
-
-const POINT_PAGE_SIZE = 5
-
-const SOURCE_LABELS: Record<number, string> = {
-  1: '下单奖励',
-  2: '签到奖励',
-  3: '评价奖励',
-  4: '邀请奖励',
-  5: '积分兑换',
-  6: '积分过期',
-  7: '手工调整',
-}
 
 const auth = useAuthStore()
 
@@ -177,14 +133,6 @@ const points = ref<PointAccountVO | null>(null)
 const checkinStatus = ref<CheckinStatusVO | null>(null)
 const loading = ref(false)
 const loadError = ref('')
-const checking = ref(false)
-
-const pointsOpen = ref(false)
-const pointLogs = ref<PointLogVO[]>([])
-const pointPageNum = ref(0)
-const pointHasMore = ref(false)
-const pointLoading = ref(false)
-const pointError = ref('')
 
 let loadSequence = 0
 
@@ -244,10 +192,7 @@ const checkinText = computed(() => {
   if (!status) {
     return '--'
   }
-  if (status.checkedInToday) {
-    return `${status.continuousDays} 天`
-  }
-  return checking.value ? '签到中…' : '去签到'
+  return status.checkedInToday ? `${status.continuousDays} 天` : '去签到'
 })
 
 const checkinLabel = computed(() => {
@@ -275,8 +220,6 @@ async function loadMine(): Promise<void> {
     points.value = null
     checkinStatus.value = null
     loadError.value = ''
-    pointsOpen.value = false
-    pointLogs.value = []
     return
   }
   if (loading.value) {
@@ -326,85 +269,29 @@ function openWallet(): void {
   uni.navigateTo({ url: '/pages/mine/Wallet' })
 }
 
-function togglePoints(): void {
+function goPoints(): void {
   if (!auth.ensureLogin('/pages/mine/Mine')) {
     return
   }
-  pointsOpen.value = !pointsOpen.value
-  if (pointsOpen.value && pointLogs.value.length === 0) {
-    loadPointLogs(true)
-  }
+  uni.navigateTo({ url: '/pages/member/Points' })
 }
 
-async function loadPointLogs(reset: boolean): Promise<void> {
-  if (pointLoading.value) {
-    return
-  }
-  if (reset) {
-    pointPageNum.value = 0
-  }
-  pointLoading.value = true
-  pointError.value = ''
-  try {
-    const page = await fetchPointLogs(pointPageNum.value + 1, POINT_PAGE_SIZE, true)
-    pointLogs.value = reset ? page.list : pointLogs.value.concat(page.list)
-    pointPageNum.value = page.pageNum
-    pointHasMore.value = pointLogs.value.length < page.total
-  } catch (err) {
-    // 保留上一次已有明细，只展示错误
-    pointError.value = (err as Error)?.message || '积分明细加载失败'
-  } finally {
-    pointLoading.value = false
-  }
-}
-
-async function handleCheckin(): Promise<void> {
+function goCheckin(): void {
   if (!auth.ensureLogin('/pages/mine/Mine')) {
     return
   }
-  if (checking.value) {
+  uni.navigateTo({ url: '/pages/member/Checkin' })
+}
+
+function goMember(): void {
+  if (!auth.ensureLogin('/pages/mine/Mine')) {
     return
   }
-  const status = checkinStatus.value
-  if (status?.checkedInToday) {
-    uni.showToast({ title: `今日已签到，连续 ${status.continuousDays} 天`, icon: 'none' })
-    return
-  }
-  checking.value = true
-  try {
-    const result = await checkin()
-    uni.showToast({ title: `签到成功 +${result.pointAward} 积分`, icon: 'none' })
-    checkinStatus.value = {
-      userId: auth.userId ?? 0,
-      today: result.checkinDate,
-      checkedInToday: true,
-      continuousDays: result.continuousDays,
-      todayPointAward: result.pointAward,
-      lastCheckinDate: result.checkinDate,
-      monthCompensationsUsed: status?.monthCompensationsUsed ?? 0,
-      monthCompensationLimit: status?.monthCompensationLimit ?? 0,
-      compensableFrom: status?.compensableFrom ?? null,
-      compensableTo: status?.compensableTo ?? null,
-    }
-    // 签到同时发积分与成长值，刷新两个展示口
-    const [account, member] = await Promise.allSettled([
-      fetchPointAccount(true),
-      fetchMemberProfile(true),
-    ])
-    if (account.status === 'fulfilled') {
-      points.value = account.value
-    }
-    if (member.status === 'fulfilled') {
-      profile.value = member.value
-    }
-    if (pointsOpen.value) {
-      loadPointLogs(true)
-    }
-  } catch (err) {
-    // 40207「今日已签到」等业务错误由 http 层统一 toast
-  } finally {
-    checking.value = false
-  }
+  uni.navigateTo({ url: '/pages/member/Member' })
+}
+
+function goMarketing(): void {
+  uni.navigateTo({ url: '/pages/marketing/Center' })
 }
 
 function goOrders(): void {
@@ -463,10 +350,6 @@ function goSettings(): void {
 
 function goAbout(): void {
   uni.navigateTo({ url: '/pages/mine/About' })
-}
-
-function pointRemark(log: PointLogVO): string {
-  return log.remark || SOURCE_LABELS[log.source] || '积分变动'
 }
 </script>
 
@@ -620,78 +503,6 @@ function pointRemark(log: PointLogVO): string {
   margin-top: 6rpx;
   font-size: 22rpx;
   color: #8a8a8a;
-}
-
-.mine__points {
-  margin-top: 16rpx;
-  padding: 20rpx 24rpx;
-}
-
-.mine__points-head {
-  padding-bottom: 12rpx;
-  border-bottom: 1rpx solid #f5f5f5;
-}
-
-.mine__points-title {
-  font-size: 28rpx;
-  font-weight: 600;
-}
-
-.mine__link {
-  color: #ff7a00;
-  font-size: 24rpx;
-}
-
-.mine__points-state {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 32rpx 0;
-  color: #8a8a8a;
-  font-size: 24rpx;
-}
-
-.mine__point-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20rpx 0;
-  border-bottom: 1rpx solid #f5f5f5;
-}
-
-.mine__point-row:last-child {
-  border-bottom: none;
-}
-
-.mine__point-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4rpx;
-}
-
-.mine__point-remark {
-  font-size: 26rpx;
-  color: #444444;
-}
-
-.mine__point-value {
-  margin-left: 16rpx;
-  color: #52c41a;
-  font-size: 28rpx;
-  font-weight: 600;
-}
-
-.mine__point-value.is-out {
-  color: #ff4d4f;
-}
-
-.mine__more {
-  padding: 20rpx 0 4rpx;
-  text-align: center;
-  color: #ff7a00;
-  font-size: 24rpx;
 }
 
 .mine__grid {

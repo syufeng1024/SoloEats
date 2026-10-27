@@ -230,6 +230,72 @@
         "navigationBarTitleText": "我的钱包",
         "enablePullDownRefresh": true
       }
+    },
+    {
+      "path": "pages/member/Member",
+      "style": {
+        "navigationBarTitleText": "会员中心"
+      }
+    },
+    {
+      "path": "pages/member/Growth",
+      "style": {
+        "navigationBarTitleText": "成长值明细",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/member/Points",
+      "style": {
+        "navigationBarTitleText": "积分明细",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/member/Checkin",
+      "style": {
+        "navigationBarTitleText": "签到",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/member/Invite",
+      "style": {
+        "navigationBarTitleText": "邀请好友"
+      }
+    },
+    {
+      "path": "pages/marketing/Center",
+      "style": {
+        "navigationBarTitleText": "活动中心"
+      }
+    },
+    {
+      "path": "pages/marketing/Promotion",
+      "style": {
+        "navigationBarTitleText": "满减活动",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/marketing/Seckill",
+      "style": {
+        "navigationBarTitleText": "限时秒杀",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/marketing/RedPacket",
+      "style": {
+        "navigationBarTitleText": "红包",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/marketing/Coupon",
+      "style": {
+        "navigationBarTitleText": "优惠券说明"
+      }
     }
   ],
   "globalStyle": {
