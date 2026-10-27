@@ -173,6 +173,103 @@ export interface FeedbackReplyPayload {
   reply: string
 }
 
+export interface ComplaintJudgePayload {
+  /** 1商家 2骑手 3平台 4用户 */
+  liability: number
+  result: string
+  /** 0无 1警告 2扣款 3封禁 */
+  punishAction: number
+}
+
+/** AgentSessionView.java，坐席端客服会话；agentId 为空表示待接待。 */
+export interface AgentSessionView {
+  id: number
+  sessionNo: string
+  userId: number
+  orderId: number | null
+  peerType: number
+  peerId: number
+  agentId: number | null
+  lastMessage: string | null
+  lastMessageAt: string | null
+  userUnread: number
+  /** 0进行中 1已结束 */
+  status: number
+  createdAt: string
+}
+
+/** ImMessageView.java，content 为纯文本，extra 为已解析的结构化对象。 */
+export interface ImMessageView {
+  id: number
+  sessionId: number
+  /** 1用户 2商家 3骑手 4平台 */
+  senderType: number
+  senderId: number
+  /** 1文字 2图片 3订单卡片 4位置 5常用语 */
+  msgType: number
+  content: string
+  extra: unknown
+  readFlag: number
+  createdAt: string
+}
+
+/** CsStatsView.java */
+export interface CsStatsView {
+  servedSessions: number
+  activeSessions: number
+  waitingSessions: number
+}
+
+/** QuickReplyView.java，status：0启用 1停用。 */
+export interface QuickReplyView {
+  id: number
+  category: string
+  content: string
+  sort: number
+  status: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CsSessionListParams {
+  status?: number
+  agentId?: number
+  pageNum?: number
+  pageSize?: number
+}
+
+export interface CsMessageListParams {
+  beforeMessageId?: number
+  pageSize?: number
+}
+
+export interface CsSendMessagePayload {
+  /** 1文字 2图片 3订单卡片 4位置 5常用语 */
+  msgType: number
+  content: string
+  extraJson?: string
+}
+
+export interface TransferCsSessionPayload {
+  toAgentId: number
+}
+
+export interface CsStatsParams {
+  /** yyyy-MM-dd */
+  dateFrom: string
+  /** yyyy-MM-dd */
+  dateTo: string
+  agentId?: number
+}
+
+export interface QuickReplyCommandPayload {
+  category: string
+  content: string
+  sort?: number | null
+  /** 0启用 1停用 */
+  status: number
+}
+
 /** GET /api/v1/admin/tickets */
 export function listTickets(params: TicketListParams): Promise<PageResult<TicketView>> {
   return request<PageResult<TicketView>>({
@@ -308,5 +405,127 @@ export function replyFeedback(
     url: `/v1/admin/feedbacks/${id}/reply`,
     method: 'PUT',
     data: payload,
+  })
+}
+
+/** PUT /api/v1/admin/complaints/{id}/judge */
+export function judgeComplaint(
+  id: number,
+  payload: ComplaintJudgePayload,
+): Promise<void> {
+  return request<void>({
+    url: `/v1/admin/complaints/${id}/judge`,
+    method: 'PUT',
+    data: payload,
+  })
+}
+
+/** GET /api/v1/admin/cs/sessions */
+export function listCsSessions(
+  params: CsSessionListParams,
+): Promise<PageResult<AgentSessionView>> {
+  return request<PageResult<AgentSessionView>>({
+    url: '/v1/admin/cs/sessions',
+    method: 'GET',
+    params,
+  })
+}
+
+/** POST /api/v1/admin/cs/sessions/{id}/take */
+export function takeCsSession(id: number): Promise<void> {
+  return request<void>({
+    url: `/v1/admin/cs/sessions/${id}/take`,
+    method: 'POST',
+  })
+}
+
+/** POST /api/v1/admin/cs/sessions/{id}/transfer */
+export function transferCsSession(
+  id: number,
+  payload: TransferCsSessionPayload,
+): Promise<void> {
+  return request<void>({
+    url: `/v1/admin/cs/sessions/${id}/transfer`,
+    method: 'POST',
+    data: payload,
+  })
+}
+
+/** POST /api/v1/admin/cs/sessions/{id}/close */
+export function closeCsSession(id: number): Promise<void> {
+  return request<void>({
+    url: `/v1/admin/cs/sessions/${id}/close`,
+    method: 'POST',
+  })
+}
+
+/** GET /api/v1/admin/cs/sessions/{id}/messages */
+export function listCsMessages(
+  id: number,
+  params?: CsMessageListParams,
+): Promise<ImMessageView[]> {
+  return request<ImMessageView[]>({
+    url: `/v1/admin/cs/sessions/${id}/messages`,
+    method: 'GET',
+    params,
+  })
+}
+
+/** POST /api/v1/admin/cs/sessions/{id}/messages */
+export function sendCsMessage(
+  id: number,
+  payload: CsSendMessagePayload,
+): Promise<ImMessageView> {
+  return request<ImMessageView>({
+    url: `/v1/admin/cs/sessions/${id}/messages`,
+    method: 'POST',
+    data: payload,
+  })
+}
+
+/** GET /api/v1/admin/cs/quick-replies */
+export function listQuickReplies(category?: string): Promise<QuickReplyView[]> {
+  return request<QuickReplyView[]>({
+    url: '/v1/admin/cs/quick-replies',
+    method: 'GET',
+    params: { category },
+  })
+}
+
+/** POST /api/v1/admin/cs/quick-replies */
+export function createQuickReply(payload: QuickReplyCommandPayload): Promise<number> {
+  return request<number>({
+    url: '/v1/admin/cs/quick-replies',
+    method: 'POST',
+    data: payload,
+  })
+}
+
+/** PUT /api/v1/admin/cs/quick-replies/{id} */
+export function updateQuickReply(
+  id: number,
+  payload: QuickReplyCommandPayload,
+): Promise<void> {
+  return request<void>({
+    url: `/v1/admin/cs/quick-replies/${id}`,
+    method: 'PUT',
+    data: payload,
+  })
+}
+
+/** DELETE /api/v1/admin/cs/quick-replies/{id} */
+export function deleteQuickReply(id: number): Promise<void> {
+  return request<void>({
+    url: `/v1/admin/cs/quick-replies/${id}`,
+    method: 'DELETE',
+  })
+}
+
+/** GET /api/v1/admin/cs/stats */
+export function getCsStats(params: CsStatsParams): Promise<CsStatsView> {
+  return request<CsStatsView>({
+    url: '/v1/admin/cs/stats',
+    method: 'GET',
+    params,
   })
 }
