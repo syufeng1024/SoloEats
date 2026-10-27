@@ -61,6 +61,41 @@
 
       <view class="rd-divider" />
 
+      <view class="mine__item" @click="goAttendance">
+        <text class="mine__item-label">考勤记录</text>
+        <text class="mine__arrow">›</text>
+      </view>
+
+      <view class="rd-divider" />
+
+      <view class="mine__item" @click="goAnomalyReport">
+        <text class="mine__item-label">异常上报</text>
+        <text class="mine__arrow">›</text>
+      </view>
+
+      <view class="rd-divider" />
+
+      <view class="mine__item" @click="goAnomalyList">
+        <text class="mine__item-label">异常记录</text>
+        <text class="mine__arrow">›</text>
+      </view>
+
+      <view class="rd-divider" />
+
+      <view class="mine__item" @click="goMessages">
+        <text class="mine__item-label">消息</text>
+        <text class="mine__arrow">›</text>
+      </view>
+
+      <view class="rd-divider" />
+
+      <view class="mine__item" @click="goSettings">
+        <text class="mine__item-label">设置</text>
+        <text class="mine__arrow">›</text>
+      </view>
+
+      <view class="rd-divider" />
+
       <view class="mine__item" @click="goRating">
         <text class="mine__item-label">我的评分</text>
         <text class="mine__arrow">›</text>
@@ -185,6 +220,26 @@ function goWithdraw(): void {
 
 function goWithdrawList(): void {
   uni.navigateTo({ url: '/pages/withdraw/List' })
+}
+
+function goAttendance(): void {
+  uni.navigateTo({ url: '/pages/schedule/Calendar' })
+}
+
+function goAnomalyReport(): void {
+  uni.navigateTo({ url: '/pages/anomaly/Report' })
+}
+
+function goAnomalyList(): void {
+  uni.navigateTo({ url: '/pages/anomaly/List' })
+}
+
+function goMessages(): void {
+  uni.navigateTo({ url: '/pages/im/Sessions' })
+}
+
+function goSettings(): void {
+  uni.navigateTo({ url: '/pages/settings/Settings' })
 }
 
 function goRating(): void {

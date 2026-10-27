@@ -101,6 +101,58 @@
       "style": {
         "navigationBarTitleText": "联系客服"
       }
+    },
+    {
+      "path": "pages/schedule/Calendar",
+      "style": {
+        "navigationBarTitleText": "考勤日历",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/schedule/Attendance",
+      "style": {
+        "navigationBarTitleText": "考勤明细",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/schedule/Shift",
+      "style": {
+        "navigationBarTitleText": "排班说明"
+      }
+    },
+    {
+      "path": "pages/anomaly/Report",
+      "style": {
+        "navigationBarTitleText": "异常上报"
+      }
+    },
+    {
+      "path": "pages/anomaly/List",
+      "style": {
+        "navigationBarTitleText": "异常记录",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/im/Sessions",
+      "style": {
+        "navigationBarTitleText": "消息",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/im/Chat",
+      "style": {
+        "navigationBarTitleText": "会话"
+      }
+    },
+    {
+      "path": "pages/settings/Settings",
+      "style": {
+        "navigationBarTitleText": "设置"
+      }
     }
   ],
   "globalStyle": {

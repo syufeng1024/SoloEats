@@ -3,8 +3,10 @@ import type {
   DeliveryActionVO,
   FaqVO,
   HallOrderVO,
+  ImMessageVO,
   ImSessionVO,
   IncomeDetailVO,
+  NotifySettingVO,
   IncomeOverviewVO,
   LoginVO,
   PageResult,
@@ -368,6 +370,75 @@ export function createImSession(payload: CreateImSessionPayload): Promise<ImSess
     method: 'POST',
     data,
     // 骑手侧发起会被后端拒绝，静默交给 Contact 页做统一的降级提示
+    silent: true,
+  })
+}
+
+/* ------------------------------------------------------------------ */
+/* IM 会话                                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * GET /im/sessions，返回当前主体参与的会话。
+ * 骑手侧对应 peer_type=3 的行（由消费者发起），对方是 userId（t_member_user.id）。
+ */
+export function fetchImSessions(): Promise<ImSessionVO[]> {
+  return request<ImSessionVO[]>({ url: '/v1/im/sessions' })
+}
+
+/** GET /im/sessions/{id}/messages，beforeMessageId 用于向前翻页，返回按时间正序 */
+export function fetchImMessages(
+  sessionId: number,
+  beforeMessageId?: number,
+  pageSize = 30,
+): Promise<ImMessageVO[]> {
+  const data: Record<string, unknown> = { pageSize }
+  if (beforeMessageId !== undefined && beforeMessageId !== null) {
+    data.beforeMessageId = beforeMessageId
+  }
+  return request<ImMessageVO[]>({
+    url: `/v1/im/sessions/${sessionId}/messages`,
+    data,
+    silent: true,
+  })
+}
+
+/** POST /im/sessions/{id}/messages，仅发文字消息（msgType=1） */
+export function sendImText(sessionId: number, content: string): Promise<ImMessageVO> {
+  return request<ImMessageVO>({
+    url: `/v1/im/sessions/${sessionId}/messages`,
+    method: 'POST',
+    data: { msgType: 1, content },
+  })
+}
+
+/** PUT /im/sessions/{id}/read，只清当前主体一侧的未读数 */
+export function markImSessionRead(sessionId: number): Promise<void> {
+  return request<void>({
+    url: `/v1/im/sessions/${sessionId}/read`,
+    method: 'PUT',
+    silent: true,
+  })
+}
+
+/* ------------------------------------------------------------------ */
+/* 通知设置                                                            */
+/* ------------------------------------------------------------------ */
+
+/** GET /notify/settings；无记录的通知类型后端按开启返回 */
+export function fetchNotifySettings(): Promise<NotifySettingVO[]> {
+  return request<NotifySettingVO[]>({ url: '/v1/notify/settings', silent: true })
+}
+
+/** PUT /notify/settings，notifyType 1订单 2营销 3系统 4会话 */
+export function updateNotifySetting(
+  notifyType: number,
+  enabled: boolean,
+): Promise<NotifySettingVO> {
+  return request<NotifySettingVO>({
+    url: '/v1/notify/settings',
+    method: 'PUT',
+    data: { notifyType, enabled },
     silent: true,
   })
 }

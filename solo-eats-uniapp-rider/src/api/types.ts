@@ -231,6 +231,27 @@ export interface ImSessionVO {
   createdAt: string
 }
 
+/** GET /im/sessions/{id}/messages → ImMessageView；senderType 1用户 2商家 3骑手 4平台 */
+export interface ImMessageVO {
+  id: number
+  sessionId: number
+  senderType: number
+  senderId: number
+  /** 1文字 2图片 3订单卡片 4位置 5常用语 */
+  msgType: number
+  content: string | null
+  extra: unknown
+  readFlag: number | null
+  createdAt: string | null
+}
+
+/** GET/PUT /notify/settings → NotifySettingView；notifyType 1订单 2营销 3系统 4会话 */
+export interface NotifySettingVO {
+  notifyType: number
+  notifyTypeName: string
+  enabled: boolean
+}
+
 /** POST /auth/login → LoginResponse */
 export interface LoginVO {
   token: string
