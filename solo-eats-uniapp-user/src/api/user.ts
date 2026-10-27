@@ -79,3 +79,17 @@ export function setDefaultAddress(id: number): Promise<void> {
 export function fetchWallet(silent = false): Promise<WalletVO> {
   return request<WalletVO>({ url: '/v1/c/wallet', silent })
 }
+
+/**
+ * POST /c/wallet/recharge。amount 单位为分，后端限制 1 ~ 100000（即 0.01 ~ 1000.00 元），
+ * 越界返回 80007；同一 Idempotency-Key 重复提交返回当前钱包，不会重复入账。
+ * 返回充值后的 WalletView。
+ */
+export function rechargeWallet(amountFen: number, idempotencyKey?: string): Promise<WalletVO> {
+  return request<WalletVO>({
+    url: '/v1/c/wallet/recharge',
+    method: 'POST',
+    data: { amount: amountFen },
+    idempotencyKey,
+  })
+}

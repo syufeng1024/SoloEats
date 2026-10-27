@@ -8,6 +8,9 @@
         <text class="wallet__sub-item">累计充值 ¥{{ wallet ? fenToYuan(wallet.totalRecharge) : '--' }}</text>
         <text class="wallet__sub-item">累计消费 ¥{{ wallet ? fenToYuan(wallet.totalConsume) : '--' }}</text>
       </view>
+      <view class="wallet__actions">
+        <text class="wallet__recharge" @click="goRecharge">充值</text>
+      </view>
     </view>
 
     <view class="wallet__section-head">
@@ -166,6 +169,10 @@ async function loadLogs(reset: boolean): Promise<void> {
   }
 }
 
+function goRecharge(): void {
+  uni.navigateTo({ url: '/pages/wallet/Recharge' })
+}
+
 function bizLabel(bizType: string): string {
   return BIZ_LABELS[bizType] || bizType || '账户变动'
 }
@@ -206,6 +213,21 @@ function bizLabel(bizType: string): string {
   margin-top: 20rpx;
   font-size: 22rpx;
   opacity: 0.92;
+}
+
+.wallet__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18rpx;
+}
+
+.wallet__recharge {
+  padding: 10rpx 36rpx;
+  border-radius: 28rpx;
+  background-color: rgba(255, 255, 255, 0.24);
+  border: 1rpx solid rgba(255, 255, 255, 0.6);
+  color: #ffffff;
+  font-size: 26rpx;
 }
 
 .wallet__section-head {

@@ -43,7 +43,12 @@
       {{ submitting ? '登录中…' : '登录' }}
     </button>
 
-    <text class="login__agreement">登录即表示同意《用户协议》与《隐私政策》</text>
+    <view class="login__agreement">
+      <text>登录即表示同意</text>
+      <text class="login__agreement-link" @click="openAgreement('user')">《用户协议》</text>
+      <text>与</text>
+      <text class="login__agreement-link" @click="openAgreement('privacy')">《隐私政策》</text>
+    </view>
     <text class="login__skip" @click="goHome">先逛逛</text>
   </view>
 </template>
@@ -165,6 +170,11 @@ function navigateAfterLogin(): void {
 function goHome(): void {
   uni.switchTab({ url: '/pages/index/Index' })
 }
+
+/** 协议页为纯静态页，type=user 展示用户协议，其余展示隐私政策 */
+function openAgreement(type: 'user' | 'privacy'): void {
+  uni.navigateTo({ url: `/pages/agreement/Privacy?type=${type}` })
+}
 </script>
 
 <style scoped>
@@ -249,11 +259,18 @@ function goHome(): void {
 }
 
 .login__agreement {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
   margin-top: 32rpx;
   text-align: center;
   font-size: 22rpx;
   color: #a0a0a0;
+}
+
+.login__agreement-link {
+  color: #ff7a00;
 }
 
 .login__skip {

@@ -1,9 +1,48 @@
 {
   "pages": [
     {
+      "path": "pages/splash/Splash",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "数创星光外卖"
+      }
+    },
+    {
       "path": "pages/index/Index",
       "style": {
         "navigationBarTitleText": "数创星光外卖"
+      }
+    },
+    {
+      "path": "pages/agreement/Privacy",
+      "style": {
+        "navigationBarTitleText": "隐私政策"
+      }
+    },
+    {
+      "path": "pages/nearby/Nearby",
+      "style": {
+        "navigationBarTitleText": "附近找店",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/shop/ShopInfo",
+      "style": {
+        "navigationBarTitleText": "店铺信息"
+      }
+    },
+    {
+      "path": "pages/shop/ShopReview",
+      "style": {
+        "navigationBarTitleText": "店铺评价",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/wallet/Recharge",
+      "style": {
+        "navigationBarTitleText": "充值"
       }
     },
     {

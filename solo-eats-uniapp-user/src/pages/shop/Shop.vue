@@ -34,6 +34,11 @@
           <text v-if="shop.pickupEnabled === 1" class="se-tag">到店自取</text>
           <text class="se-tag">{{ shop.statusText || '营业中' }}</text>
         </view>
+        <view class="shop__links">
+          <text class="shop__link" @click="goShopInfo">店铺信息</text>
+          <text class="shop__link-sep">|</text>
+          <text class="shop__link" @click="goShopReviews">店铺评价</text>
+        </view>
       </view>
 
       <view class="shop__body">
@@ -230,6 +235,17 @@ function onSkuConfirm(line: CartLine): void {
   uni.showToast({ title: '已加入购物车', icon: 'none' })
 }
 
+function goShopInfo(): void {
+  uni.navigateTo({ url: `/pages/shop/ShopInfo?id=${shopId.value}` })
+}
+
+function goShopReviews(): void {
+  const name = shop.value?.shopName || ''
+  uni.navigateTo({
+    url: `/pages/shop/ShopReview?shopId=${shopId.value}&shopName=${encodeURIComponent(name)}`,
+  })
+}
+
 function goCart(): void {
   if (cartCount.value === 0) {
     uni.showToast({ title: '购物车还是空的', icon: 'none' })
@@ -338,6 +354,23 @@ function goCheckout(): void {
 
 .shop__tags {
   margin-top: 12rpx;
+}
+
+.shop__links {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 10rpx;
+}
+
+.shop__link {
+  font-size: 22rpx;
+  color: #ff7a00;
+}
+
+.shop__link-sep {
+  font-size: 20rpx;
+  color: #d0d0d0;
 }
 
 .shop__body {

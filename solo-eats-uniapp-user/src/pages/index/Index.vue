@@ -22,9 +22,9 @@
     </view>
 
     <view class="se-card home__quick">
-      <view class="home__quick-item" @click="reload">
+      <view class="home__quick-item" @click="goNearby">
         <text class="home__quick-icon">店</text>
-        <text class="home__quick-text">附近好店</text>
+        <text class="home__quick-text">附近找店</text>
       </view>
       <view class="home__quick-item" @click="goOrders">
         <text class="home__quick-icon">单</text>
@@ -246,6 +246,10 @@ async function loadShops(reset: boolean): Promise<void> {
 
 function reload(): void {
   loadShops(true)
+}
+
+function goNearby(): void {
+  uni.navigateTo({ url: '/pages/nearby/Nearby' })
 }
 
 function loadMore(): void {
