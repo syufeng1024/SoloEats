@@ -1,7 +1,10 @@
 package com.soloeats.message.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.soloeats.common.api.PageResult;
 import com.soloeats.common.exception.BizException;
 import com.soloeats.common.exception.ErrorCode;
 import com.soloeats.message.domain.entity.ImMessage;
@@ -11,6 +14,7 @@ import com.soloeats.message.mapper.ImSessionMapper;
 import com.soloeats.message.service.ImSessionService;
 import com.soloeats.message.service.PushService;
 import com.soloeats.message.service.command.PushPayload;
+import com.soloeats.message.service.view.AgentSessionView;
 import com.soloeats.message.service.view.ImMessageView;
 import com.soloeats.message.service.view.ImSessionView;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +26,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -55,8 +60,15 @@ public class ImSessionServiceImpl implements ImSessionService {
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 50;
 
+    /** 会话状态：0进行中 1已结束 2只读。 */
     private static final int SESSION_ACTIVE = 0;
+    private static final int SESSION_READONLY = 2;
     private static final int HIDDEN = 1;
+
+    /** t_im_session.peer_type 中「平台客服」的取值。 */
+    private static final int PEER_TYPE_CS = 4;
+    private static final long AGENT_DEFAULT_PAGE_SIZE = 20L;
+    private static final long AGENT_MAX_PAGE_SIZE = 100L;
 
     /** t_notify_setting.notify_type：1订单 2营销 3系统 4会话。 */
     private static final int NOTIFY_TYPE_IM = 4;
@@ -151,21 +163,23 @@ public class ImSessionServiceImpl implements ImSessionService {
     public List<ImMessageView> messages(Long sessionId, Integer subjectType, Long subjectId,
                                         Long beforeMessageId, Integer pageSize) {
         ImSession session = requireParticipantSession(sessionId, subjectType, subjectId);
-        if (beforeMessageId != null && beforeMessageId <= 0L) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "beforeMessageId 必须为正整数");
+        return loadMessages(session.getId(), beforeMessageId, pageSize);
+    }
+
+    @Override
+    public List<ImMessageView> agentMessages(Long sessionId, Long agentId,
+                                             Long beforeMessageId, Integer pageSize) {
+        requireSessionId(sessionId);
+        requireAgentId(agentId);
+        ImSession session = imSessionMapper.selectById(sessionId);
+        if (session == null || !Objects.equals(session.getPeerType(), PEER_TYPE_CS)) {
+            throw new BizException(ErrorCode.IM_SESSION_NOT_FOUND);
         }
-        int limit = normalizePageSize(pageSize);
-        List<ImMessage> rows = imMessageMapper.selectPage(session.getId(), beforeMessageId, limit);
-        if (rows == null || rows.isEmpty()) {
-            return List.of();
+        // agent_id 为空 = 待接待池，坐席需要先看内容再决定是否接待
+        if (session.getAgentId() != null && !session.getAgentId().equals(agentId)) {
+            throw new BizException(ErrorCode.IM_NOT_PARTICIPANT);
         }
-        // 查询按 id DESC，接口返回时间正序，前端直接 append
-        List<ImMessage> ascending = new ArrayList<>(rows);
-        Collections.reverse(ascending);
-        return ascending.stream()
-                .filter(Objects::nonNull)
-                .map(message -> ImMessageView.from(message, parseExtra(message.getExtraJson())))
-                .toList();
+        return loadMessages(session.getId(), beforeMessageId, pageSize);
     }
 
     @Transactional
@@ -251,6 +265,151 @@ public class ImSessionServiceImpl implements ImSessionService {
             imSessionMapper.hidePeerSide(session.getId());
         }
         log.info("im session hidden id={} by={}:{}", session.getId(), subjectType, subjectId);
+    }
+
+    // ------------------------------------------------------------
+    // T09 阶段B 客服工作台坐席端
+    // ------------------------------------------------------------
+
+    @Override
+    public PageResult<AgentSessionView> listAgentSessions(Integer status, Long agentId,
+                                                          long pageNum, long pageSize) {
+        if (status != null && (status < SESSION_ACTIVE || status > SESSION_READONLY)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "status 只能是 0进行中 1已结束 2只读");
+        }
+        if (agentId != null && agentId <= 0L) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "agentId 必须为正整数");
+        }
+        long normalizedPageNum = pageNum < 1 ? 1 : pageNum;
+        long normalizedPageSize = pageSize < 1
+                ? AGENT_DEFAULT_PAGE_SIZE
+                : Math.min(pageSize, AGENT_MAX_PAGE_SIZE);
+
+        LambdaQueryWrapper<ImSession> wrapper = new LambdaQueryWrapper<ImSession>()
+                .eq(ImSession::getPeerType, PEER_TYPE_CS)
+                .eq(status != null, ImSession::getStatus, status)
+                .eq(agentId != null, ImSession::getAgentId, agentId)
+                .orderByAsc(ImSession::getStatus)
+                .orderByDesc(ImSession::getLastMessageAt)
+                .orderByDesc(ImSession::getId);
+
+        Page<ImSession> page = imSessionMapper.selectPage(
+                new Page<>(normalizedPageNum, normalizedPageSize), wrapper);
+        List<ImSession> records = page.getRecords() == null ? List.of() : page.getRecords();
+        List<AgentSessionView> views = records.stream()
+                .filter(Objects::nonNull)
+                .map(AgentSessionView::from)
+                .toList();
+        return PageResult.of(views, page.getTotal(), normalizedPageNum, normalizedPageSize);
+    }
+
+    @Override
+    public void takeSession(Long sessionId, Long agentId) {
+        requireSessionId(sessionId);
+        requireAgentId(agentId);
+        // 单条条件更新即完成「抢占」：WHERE 带 agent_id IS NULL，并发下只有一行能命中
+        if (imSessionMapper.takeSession(sessionId, agentId) > 0) {
+            log.info("cs session taken id={} agent={}", sessionId, agentId);
+            return;
+        }
+        ImSession session = requireCsSession(sessionId);
+        if (!Objects.equals(session.getStatus(), SESSION_ACTIVE)) {
+            throw new BizException(ErrorCode.IM_SESSION_CLOSED);
+        }
+        // status=0 且 peer_type=4 仍未命中，只可能是 agent_id 已有值
+        throw new BizException(ErrorCode.CS_SESSION_ALREADY_TAKEN);
+    }
+
+    @Override
+    public void transferSession(Long sessionId, Long toAgentId, Long operatorId) {
+        requireSessionId(sessionId);
+        requireAgentId(toAgentId);
+        if (imSessionMapper.transferAgent(sessionId, toAgentId) > 0) {
+            log.info("cs session transferred id={} toAgent={} operator={}",
+                    sessionId, toAgentId, operatorId);
+            return;
+        }
+        requireCsSession(sessionId);
+        throw new BizException(ErrorCode.IM_SESSION_CLOSED);
+    }
+
+    @Override
+    public void closeSessionByAgent(Long sessionId, Long operatorId) {
+        requireSessionId(sessionId);
+        if (imSessionMapper.closeSession(sessionId) > 0) {
+            log.info("cs session closed id={} operator={}", sessionId, operatorId);
+            return;
+        }
+        requireCsSession(sessionId);
+        throw new BizException(ErrorCode.IM_SESSION_CLOSED);
+    }
+
+    @Override
+    public long countServedSessions(Long agentId, LocalDate dateFrom, LocalDate dateTo) {
+        if (agentId != null && agentId <= 0L) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "agentId 必须为正整数");
+        }
+        if (dateFrom != null && dateTo != null && dateFrom.isAfter(dateTo)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "dateFrom 不能晚于 dateTo");
+        }
+        LocalDateTime start = dateFrom == null ? null : dateFrom.atStartOfDay();
+        LocalDateTime end = dateTo == null ? null : dateTo.plusDays(1).atStartOfDay();
+        return imSessionMapper.countServedSessions(agentId, start, end);
+    }
+
+    @Override
+    public long countActiveSessions(Long agentId) {
+        if (agentId != null && agentId <= 0L) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "agentId 必须为正整数");
+        }
+        return imSessionMapper.countActiveSessions(agentId);
+    }
+
+    @Override
+    public long countWaitingSessions() {
+        return imSessionMapper.countWaitingSessions();
+    }
+
+    /**
+     * 消息分页的唯一实现：C 端与坐席端共用。调用方必须已完成会话存在性与参与者校验。
+     */
+    private List<ImMessageView> loadMessages(Long sessionId, Long beforeMessageId, Integer pageSize) {
+        if (beforeMessageId != null && beforeMessageId <= 0L) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "beforeMessageId 必须为正整数");
+        }
+        int limit = normalizePageSize(pageSize);
+        List<ImMessage> rows = imMessageMapper.selectPage(sessionId, beforeMessageId, limit);
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+        // 查询按 id DESC，接口返回时间正序，前端直接 append
+        List<ImMessage> ascending = new ArrayList<>(rows);
+        Collections.reverse(ascending);
+        return ascending.stream()
+                .filter(Objects::nonNull)
+                .map(message -> ImMessageView.from(message, parseExtra(message.getExtraJson())))
+                .toList();
+    }
+
+    private void requireSessionId(Long sessionId) {
+        if (sessionId == null || sessionId <= 0L) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "会话ID不能为空");
+        }
+    }
+
+    private void requireAgentId(Long agentId) {
+        if (agentId == null || agentId <= 0L) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "坐席ID不能为空");
+        }
+    }
+
+    /** 条件更新未命中时的区分：不存在或不是客服会话统一 90001，其余由调用方判状态。 */
+    private ImSession requireCsSession(Long sessionId) {
+        ImSession session = imSessionMapper.selectById(sessionId);
+        if (session == null || !Objects.equals(session.getPeerType(), PEER_TYPE_CS)) {
+            throw new BizException(ErrorCode.IM_SESSION_NOT_FOUND);
+        }
+        return session;
     }
 
     private ImSession requireParticipantSession(Long sessionId, Integer subjectType, Long subjectId) {

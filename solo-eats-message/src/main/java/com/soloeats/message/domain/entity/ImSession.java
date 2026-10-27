@@ -39,6 +39,9 @@ public class ImSession {
     /** 对方（商家/骑手/客服）ID */
     private Long peerId;
 
+    /** 接待坐席 t_sys_user.id；NULL = 尚未被接待（仅 peer_type=4 的客服会话使用） */
+    private Long agentId;
+
     /** 最近一条消息摘要，纯文本，最长 200 */
     private String lastMessage;
 

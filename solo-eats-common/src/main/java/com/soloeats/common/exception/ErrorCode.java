@@ -103,6 +103,9 @@ public enum ErrorCode {
     IM_NOT_PARTICIPANT(90003, "非会话参与者", HttpStatus.FORBIDDEN),
     WS_UNAUTHORIZED(90004, "WebSocket 鉴权失败", HttpStatus.UNAUTHORIZED),
 
+    // T09 阶段B 客服工作台坐席端（90005 起，补 90001~90004 之后的空段）
+    CS_SESSION_ALREADY_TAKEN(90005, "会话已被其他坐席接待", HttpStatus.CONFLICT),
+
     // T09 客服工单（90010 起）
     TICKET_NOT_FOUND(90010, "工单不存在", HttpStatus.NOT_FOUND),
     TICKET_STATUS_INVALID(90011, "工单状态不允许当前操作", HttpStatus.CONFLICT),

@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -182,6 +183,128 @@ class ImSessionServiceImplTest {
         assertBizCode(() -> imSessionService.send(SESSION_ID, USER, USER_ID, 1, "hi", "{not-json"),
                 ErrorCode.PARAM_INVALID);
         verify(imMessageMapper, never()).insert(ArgumentMatchers.<ImMessage>any());
+    }
+
+    // ------------------------------------------------------------
+    // T09 阶段B 客服工作台坐席端
+    // ------------------------------------------------------------
+
+    @Test
+    @DisplayName("接待并发：条件更新只成功一次，第二次抛 90005")
+    void takeSessionOnlyOnce() {
+        long agentId = 66L;
+        when(imSessionMapper.takeSession(SESSION_ID, agentId)).thenReturn(1, 0);
+        when(imSessionMapper.selectById(SESSION_ID)).thenReturn(csSession(0, agentId));
+
+        imSessionService.takeSession(SESSION_ID, agentId);
+
+        assertBizCode(() -> imSessionService.takeSession(SESSION_ID, agentId),
+                ErrorCode.CS_SESSION_ALREADY_TAKEN);
+        verify(imSessionMapper, times(2)).takeSession(SESSION_ID, agentId);
+    }
+
+    @Test
+    @DisplayName("已结束会话接待抛 90002")
+    void takeEndedSessionRejected() {
+        long agentId = 66L;
+        when(imSessionMapper.takeSession(SESSION_ID, agentId)).thenReturn(0);
+        when(imSessionMapper.selectById(SESSION_ID)).thenReturn(csSession(1, null));
+
+        assertBizCode(() -> imSessionService.takeSession(SESSION_ID, agentId),
+                ErrorCode.IM_SESSION_CLOSED);
+    }
+
+    @Test
+    @DisplayName("不存在的会话接待抛 90001")
+    void takeMissingSessionRejected() {
+        long agentId = 66L;
+        when(imSessionMapper.takeSession(SESSION_ID, agentId)).thenReturn(0);
+        when(imSessionMapper.selectById(SESSION_ID)).thenReturn(null);
+
+        assertBizCode(() -> imSessionService.takeSession(SESSION_ID, agentId),
+                ErrorCode.IM_SESSION_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("非客服会话（peer_type=2）接待抛 90001")
+    void takeMerchantSessionRejected() {
+        long agentId = 66L;
+        when(imSessionMapper.takeSession(SESSION_ID, agentId)).thenReturn(0);
+        when(imSessionMapper.selectById(SESSION_ID))
+                .thenReturn(session(USER_ID, MERCHANT, MERCHANT_ID, 0));
+
+        assertBizCode(() -> imSessionService.takeSession(SESSION_ID, agentId),
+                ErrorCode.IM_SESSION_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("结束会话二次调用抛 90002")
+    void closeSessionTwiceRejected() {
+        long operatorId = 66L;
+        when(imSessionMapper.closeSession(SESSION_ID)).thenReturn(1, 0);
+        when(imSessionMapper.selectById(SESSION_ID)).thenReturn(csSession(1, operatorId));
+
+        imSessionService.closeSessionByAgent(SESSION_ID, operatorId);
+
+        assertBizCode(() -> imSessionService.closeSessionByAgent(SESSION_ID, operatorId),
+                ErrorCode.IM_SESSION_CLOSED);
+        verify(imSessionMapper, times(2)).closeSession(SESSION_ID);
+    }
+
+    @Test
+    @DisplayName("待接待会话（agent_id 为空）任意坐席可读消息")
+    void agentMessagesAllowedForWaitingSession() {
+        long agentId = 66L;
+        when(imSessionMapper.selectById(SESSION_ID)).thenReturn(csSession(0, null));
+        when(imMessageMapper.selectPage(SESSION_ID, null, 20)).thenReturn(List.of(message()));
+
+        List<ImMessageView> views = imSessionService.agentMessages(SESSION_ID, agentId, null, null);
+
+        assertThat(views).hasSize(1);
+        assertThat(views.get(0).content()).isEqualTo("你好");
+    }
+
+    @Test
+    @DisplayName("已被 A 坐席接待的会话，B 坐席读消息抛 90003")
+    void agentMessagesRejectedForOtherAgent() {
+        long agentA = 66L;
+        long agentB = 77L;
+        when(imSessionMapper.selectById(SESSION_ID)).thenReturn(csSession(0, agentA));
+
+        assertBizCode(() -> imSessionService.agentMessages(SESSION_ID, agentB, null, 20),
+                ErrorCode.IM_NOT_PARTICIPANT);
+        verify(imMessageMapper, never()).selectPage(anyLong(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("接待坐席本人可读消息")
+    void agentMessagesAllowedForOwnSession() {
+        long agentA = 66L;
+        when(imSessionMapper.selectById(SESSION_ID)).thenReturn(csSession(0, agentA));
+        when(imMessageMapper.selectPage(SESSION_ID, null, 20)).thenReturn(List.of(message()));
+
+        List<ImMessageView> views = imSessionService.agentMessages(SESSION_ID, agentA, null, null);
+
+        assertThat(views).hasSize(1);
+        verify(imMessageMapper).selectPage(SESSION_ID, null, 20);
+    }
+
+    private ImMessage message() {
+        ImMessage message = new ImMessage();
+        message.setId(MESSAGE_ID);
+        message.setSessionId(SESSION_ID);
+        message.setSenderType(USER);
+        message.setSenderId(USER_ID);
+        message.setMsgType(1);
+        message.setContent("你好");
+        message.setReadFlag(0);
+        return message;
+    }
+
+    private ImSession csSession(int status, Long agentId) {
+        ImSession session = session(USER_ID, 4, 66L, status);
+        session.setAgentId(agentId);
+        return session;
     }
 
     private ImSession session(long userId, int peerType, long peerId, int status) {

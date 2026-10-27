@@ -79,4 +79,53 @@ public interface ImSessionMapper extends BaseMapper<ImSession> {
             + " ORDER BY last_message_at DESC, id DESC</script>")
     List<ImSession> selectMine(@Param("receiverType") Integer receiverType,
                                @Param("receiverId") Long receiverId);
+
+    // ------------------------------------------------------------
+    // T09 阶段B 客服工作台坐席端：只处理 peer_type = 4 的会话
+    // ------------------------------------------------------------
+
+    /**
+     * 接待：条件更新把 agent_id 从 NULL 改成当前坐席。
+     * 条件里同时带 peer_type=4、status=0、agent_id IS NULL，并发抢接只有一行更新成功；
+     * 影响 0 行时由调用方 selectById 区分「不存在 / 已结束 / 已被他人接待」。
+     */
+    @Update("UPDATE t_im_session SET agent_id = #{agentId} "
+            + "WHERE id = #{id} AND peer_type = 4 AND status = 0 AND agent_id IS NULL")
+    int takeSession(@Param("id") Long id, @Param("agentId") Long agentId);
+
+    /**
+     * 转接：管理员可强制改接待人，条件只校验 peer_type=4 且 status=0。
+     * 不校验当前 agent_id，是否本人接待由接口权限（service:cs:handle）控制。
+     */
+    @Update("UPDATE t_im_session SET agent_id = #{agentId} "
+            + "WHERE id = #{id} AND peer_type = 4 AND status = 0")
+    int transferAgent(@Param("id") Long id, @Param("agentId") Long agentId);
+
+    /** 结束会话：status 0→1，用户侧随之只读（send 对 status != 0 抛 90002）。 */
+    @Update("UPDATE t_im_session SET status = 1 "
+            + "WHERE id = #{id} AND peer_type = 4 AND status = 0")
+    int closeSession(@Param("id") Long id);
+
+    /** 坐席已接待完成量：status=1 且 agent_id 命中；agentId 为空时统计全部坐席。 */
+    @Select("<script>SELECT COUNT(*) FROM t_im_session "
+            + "WHERE peer_type = 4 AND status = 1 "
+            + "<if test='agentId != null'>AND agent_id = #{agentId}</if>"
+            + "<if test='start != null'> AND updated_at &gt;= #{start}</if>"
+            + "<if test='end != null'> AND updated_at &lt; #{end}</if>"
+            + "</script>")
+    long countServedSessions(@Param("agentId") Long agentId,
+                             @Param("start") LocalDateTime start,
+                             @Param("end") LocalDateTime end);
+
+    /** 进行中会话数：status=0，agentId 为空时统计全部坐席（含未接待）。 */
+    @Select("<script>SELECT COUNT(*) FROM t_im_session "
+            + "WHERE peer_type = 4 AND status = 0 "
+            + "<if test='agentId != null'>AND agent_id = #{agentId}</if>"
+            + "</script>")
+    long countActiveSessions(@Param("agentId") Long agentId);
+
+    /** 待接待队列：status=0 且尚未分配坐席，与具体坐席无关。 */
+    @Select("SELECT COUNT(*) FROM t_im_session "
+            + "WHERE peer_type = 4 AND status = 0 AND agent_id IS NULL")
+    long countWaitingSessions();
 }
