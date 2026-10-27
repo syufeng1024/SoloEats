@@ -45,6 +45,8 @@ public enum ErrorCode {
     SECKILL_LIMIT_EXCEEDED(40204, "超出限购数量", HttpStatus.CONFLICT),
     SECKILL_NOT_STARTED(40205, "秒杀活动未开始或已结束", HttpStatus.CONFLICT),
     POINT_NOT_ENOUGH(40206, "积分不足", HttpStatus.CONFLICT),
+    CHECKIN_ALREADY_DONE(40207, "今日已签到", HttpStatus.CONFLICT),
+    INVITE_INVALID(40208, "邀请码无效或已被使用", HttpStatus.CONFLICT),
 
     // T12 阶段A-1 券后台管理（402xx 段）
     COUPON_TEMPLATE_NOT_FOUND(40210, "优惠券模板不存在", HttpStatus.NOT_FOUND),

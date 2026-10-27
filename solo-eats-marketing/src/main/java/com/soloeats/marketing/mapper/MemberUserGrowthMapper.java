@@ -2,6 +2,7 @@ package com.soloeats.marketing.mapper;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 /**
@@ -30,4 +31,31 @@ public interface MemberUserGrowthMapper {
     int updateGrowthAndLevel(@Param("userId") Long userId,
                              @Param("growthValue") int growthValue,
                              @Param("levelId") Long levelId);
+
+    /**
+     * 只读校验用户存在且状态正常。t_member_user 的 status：0正常 1禁用 2注销。
+     * 跨表只读，不引入 member 模块依赖，沿用本 Mapper 既有做法。
+     */
+    @Select("""
+            SELECT id
+            FROM t_member_user
+            WHERE id = #{userId}
+              AND deleted = 0
+              AND status = 0
+            """)
+    Long selectActiveUserId(@Param("userId") Long userId);
+
+    /**
+     * 锁定用户行，用于签到/补签的连续天数与补签月次数串行化，
+     * 以及邀请绑定按邀请人串行化 24h 次数校验。调用方必须处在事务中。
+     */
+    @Select("""
+            SELECT id
+            FROM t_member_user
+            WHERE id = #{userId}
+              AND deleted = 0
+              AND status = 0
+            FOR UPDATE
+            """)
+    Long lockActiveUser(@Param("userId") Long userId);
 }
