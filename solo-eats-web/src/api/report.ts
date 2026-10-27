@@ -1,5 +1,5 @@
 import { request } from './http'
-import type { DashboardView } from './types'
+import type { DashboardView, PageResult } from './types'
 
 /** 经营总览聚合粒度。后端会把非法值归一到 day。 */
 export type ReportGranularity = 'day' | 'week' | 'month'
@@ -73,6 +73,58 @@ export interface UserReportView {
   repurchaseRate: number
 }
 
+export type ProductRankSortBy = 'saleAmount' | 'saleQty'
+
+/** ProductRankView.java，saleAmount 为净销售额（分）。 */
+export interface ProductRankView {
+  spuId: number | null
+  skuId: number | null
+  spuName: string
+  categoryId: number | null
+  saleQty: number
+  saleAmount: number
+  refundQty: number
+}
+
+/** ShopRankView.java，gmv 单位分；cancelRate 为百分比数值（3.25 表示 3.25%）。 */
+export interface ShopRankView {
+  shopId: number
+  shopName: string
+  merchantId: number
+  orderCount: number
+  gmv: number
+  rating: number
+  avgPrepMinutes: number
+  cancelRate: number
+}
+
+/**
+ * RiderAnalysisView.java，incomeAmount 单位分；
+ * onTimeRate 为百分比数值（66.67 表示 66.67%）。
+ */
+export interface RiderAnalysisView {
+  riderId: number
+  riderName: string
+  deliveryCount: number
+  onTimeCount: number
+  onTimeRate: number
+  rating: number
+  incomeAmount: number
+  onlineMinutes: number
+  avgDeliveryMinutes: number
+}
+
+export interface ReportProductParams extends ReportRangeParams {
+  sortBy: ProductRankSortBy
+  categoryId?: number
+  pageNum: number
+  pageSize: number
+}
+
+export interface ReportTopNParams extends ReportRangeParams {
+  topN: number
+}
+
 /** GET /api/v1/admin/report/dashboard，权限码 report:dashboard:view */
 export function getDashboard(): Promise<DashboardView> {
   return request<DashboardView>({
@@ -112,6 +164,35 @@ export function getReportFinance(params: ReportRangeParams): Promise<FinanceRepo
 export function getReportUsers(params: ReportRangeParams): Promise<UserReportView> {
   return request<UserReportView>({
     url: '/v1/admin/report/users',
+    method: 'GET',
+    params,
+  })
+}
+
+/** GET /api/v1/admin/report/products，权限码 report:product:view */
+export function getReportProducts(
+  params: ReportProductParams,
+): Promise<PageResult<ProductRankView>> {
+  return request<PageResult<ProductRankView>>({
+    url: '/v1/admin/report/products',
+    method: 'GET',
+    params,
+  })
+}
+
+/** GET /api/v1/admin/report/shops，权限码 report:shop:view */
+export function getReportShops(params: ReportTopNParams): Promise<ShopRankView[]> {
+  return request<ShopRankView[]>({
+    url: '/v1/admin/report/shops',
+    method: 'GET',
+    params,
+  })
+}
+
+/** GET /api/v1/admin/report/riders，权限码 report:rider:view */
+export function getReportRiders(params: ReportTopNParams): Promise<RiderAnalysisView[]> {
+  return request<RiderAnalysisView[]>({
+    url: '/v1/admin/report/riders',
     method: 'GET',
     params,
   })
