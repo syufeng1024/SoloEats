@@ -1,47 +1,19 @@
 <script setup lang="ts">
-import { computed, type Component } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
-import {
-  DataLine,
-  Goods,
-  Money,
-  OfficeBuilding,
-  PriceTag,
-  Shop,
-  SwitchButton,
-  Tickets,
-  Wallet,
-} from '@element-plus/icons-vue'
+import { SwitchButton } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
-import { ROLES, roleLabel } from '@/constants/roles'
-
-interface MenuItem {
-  path: string
-  label: string
-  icon: Component
-  roles: string[]
-}
-
-const MENU_ITEMS: MenuItem[] = [
-  { path: '/merchant/orders', label: '订单管理', icon: Tickets, roles: [ROLES.MERCHANT] },
-  { path: '/merchant/products', label: '商品与库存', icon: Goods, roles: [ROLES.MERCHANT] },
-  { path: '/merchant/settlements', label: '财务结算', icon: Wallet, roles: [ROLES.MERCHANT] },
-  { path: '/admin/overview', label: '运营看板', icon: DataLine, roles: [ROLES.ADMIN] },
-  { path: '/merchant/apply', label: '商家入驻审核', icon: Shop, roles: [ROLES.ADMIN] },
-  { path: '/store/shop', label: '门店管理', icon: OfficeBuilding, roles: [ROLES.ADMIN] },
-  { path: '/product/spu', label: '商品库', icon: Goods, roles: [ROLES.ADMIN] },
-  { path: '/marketing/coupon', label: '券管理', icon: PriceTag, roles: [ROLES.ADMIN] },
-  { path: '/admin/settlements', label: '抽成结算', icon: Money, roles: [ROLES.ADMIN] },
-]
+import { useMenuStore } from '@/stores/menu'
+import { roleLabel } from '@/constants/roles'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const menuStore = useMenuStore()
 
-const menuItems = computed(() =>
-  MENU_ITEMS.filter((item) => item.roles.some((role) => auth.hasRole(role))),
-)
+// 后端菜单优先；加载失败或没有可路由菜单时由 store 回退到硬编码菜单并按角色过滤
+const menuItems = computed(() => menuStore.flatMenus)
 const pageTitle = computed(() => route.meta.title ?? '控制台')
 
 async function handleLogout(): Promise<void> {
@@ -163,6 +135,9 @@ async function handleLogout(): Promise<void> {
 .app-menu {
   border-right: none;
   flex: 1;
+  /* 菜单改由后端驱动后可能有 50+ 项，必须内部滚动，否则会撑出 100vh 导致底部项不可见 */
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .app-menu :deep(.el-menu-item) {

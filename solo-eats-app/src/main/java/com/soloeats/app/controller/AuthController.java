@@ -3,6 +3,7 @@ package com.soloeats.app.controller;
 import com.soloeats.app.dto.LoginRequest;
 import com.soloeats.app.vo.LoginResponse;
 import com.soloeats.common.api.ApiResponse;
+import com.soloeats.common.auth.AuthContext;
 import com.soloeats.common.auth.JwtUtils;
 import com.soloeats.common.auth.Roles;
 import com.soloeats.common.auth.UserPrincipal;
@@ -12,20 +13,24 @@ import com.soloeats.common.ratelimit.RateLimit;
 import com.soloeats.common.ratelimit.RateLimitDimension;
 import com.soloeats.system.service.AuthService;
 import com.soloeats.system.service.SysLogService;
+import com.soloeats.system.service.SysMenuService;
 import com.soloeats.system.service.command.PasswordLoginCommand;
 import com.soloeats.system.service.view.LoginResult;
+import com.soloeats.system.service.view.MenuNode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -53,17 +58,20 @@ public class AuthController {
     private final JwtUtils jwtUtils;
     private final AuthService authService;
     private final SysLogService sysLogService;
+    private final SysMenuService sysMenuService;
     private final StringRedisTemplate redisTemplate;
     private final boolean mockLoginEnabled;
 
     public AuthController(JwtUtils jwtUtils,
                           AuthService authService,
                           SysLogService sysLogService,
+                          SysMenuService sysMenuService,
                           StringRedisTemplate redisTemplate,
                           @Value("${app.auth.mock-login-enabled:true}") boolean mockLoginEnabled) {
         this.jwtUtils = jwtUtils;
         this.authService = authService;
         this.sysLogService = sysLogService;
+        this.sysMenuService = sysMenuService;
         this.redisTemplate = redisTemplate;
         this.mockLoginEnabled = mockLoginEnabled;
     }
@@ -87,6 +95,16 @@ public class AuthController {
             return passwordLogin(request, ip, ua);
         }
         return mockLogin(request, ip, ua);
+    }
+
+    /**
+     * 当前登录账号的菜单树。账号身份只从 JWT 上下文取，不接受前端传 userId；
+     * 未登录由 {@link AuthContext#require()} 抛 AUTH_UNAUTHORIZED。
+     */
+    @GetMapping("/menus")
+    public ApiResponse<List<MenuNode>> menus() {
+        UserPrincipal principal = AuthContext.require();
+        return ApiResponse.ok(sysMenuService.treeByUser(principal.userId(), null));
     }
 
     private ApiResponse<LoginResponse> passwordLogin(LoginRequest request, String ip, String ua) {

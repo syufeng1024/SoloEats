@@ -32,6 +32,22 @@ export interface LoginResponse {
   roles: string[]
 }
 
+/** MenuNode.java，后端菜单树节点；menuType 1目录 2菜单 3按钮 */
+export interface MenuNode {
+  id: number
+  parentId: number
+  menuName: string
+  menuType: number
+  path: string | null
+  component: string | null
+  perms: string | null
+  icon: string | null
+  sort: number
+  visible: number
+  status: number
+  children: MenuNode[]
+}
+
 export interface OrderStatusVO {
   orderId: number
   status: number

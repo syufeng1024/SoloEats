@@ -7,6 +7,7 @@ import com.soloeats.system.domain.entity.SysMenu;
 import com.soloeats.system.domain.entity.SysRoleMenu;
 import com.soloeats.system.mapper.SysMenuMapper;
 import com.soloeats.system.mapper.SysRoleMenuMapper;
+import com.soloeats.system.mapper.SysUserRoleMapper;
 import com.soloeats.system.service.SysMenuService;
 import com.soloeats.system.service.SysTenantService;
 import com.soloeats.system.tenant.TenantContext;
@@ -38,6 +39,10 @@ public class SysMenuServiceImpl implements SysMenuService {
     private static final int TYPE_MENU = 2;
     private static final int TYPE_BUTTON = 3;
 
+    /** V4 种子中的「平台超级管理员」固定角色 ID。 */
+    private static final long SUPER_ADMIN_ROLE_ID = 1L;
+    private static final int STATUS_ENABLED = 0;
+
     private static final int MAX_MENU_NAME_LENGTH = 64;
     private static final int MAX_PATH_LENGTH = 200;
     private static final int MAX_COMPONENT_LENGTH = 200;
@@ -46,6 +51,7 @@ public class SysMenuServiceImpl implements SysMenuService {
 
     private final SysMenuMapper sysMenuMapper;
     private final SysRoleMenuMapper sysRoleMenuMapper;
+    private final SysUserRoleMapper sysUserRoleMapper;
     private final SysTenantService sysTenantService;
 
     @Override
@@ -72,7 +78,57 @@ public class SysMenuServiceImpl implements SysMenuService {
                 .orderByAsc(SysMenu::getSort)
                 .orderByAsc(SysMenu::getId);
 
-        List<SysMenu> menus = sysMenuMapper.selectList(wrapper);
+        return buildTree(sysMenuMapper.selectList(wrapper));
+    }
+
+    @Override
+    public List<MenuNode> treeByUser(Long userId, Integer menuType) {
+        if (menuType != null && menuType != TYPE_DIRECTORY && menuType != TYPE_MENU) {
+            // 树接口不接受按钮类型；menuType 为空时按调用方要求不过滤类型
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "menuType 只能是 1目录 或 2菜单，按钮不属于菜单树");
+        }
+        if (userId == null) {
+            return List.of();
+        }
+
+        List<Long> roleIds = sysUserRoleMapper.selectRoleIdsByUserId(userId, TenantContext.get());
+        if (roleIds == null || roleIds.isEmpty()) {
+            return List.of();
+        }
+        // 超管可能未在 t_sys_role_menu 中单独绑定，直接复用全量树，避免登录后菜单为空
+        if (roleIds.contains(SUPER_ADMIN_ROLE_ID)) {
+            return tree(menuType);
+        }
+
+        List<Long> menuIds = sysRoleMenuMapper.selectMenuIdsByUserId(userId, TenantContext.get());
+        if (menuIds == null || menuIds.isEmpty()) {
+            return List.of();
+        }
+
+        // 租户套餐收敛：与 tree() 保持同一口径，套餐失效时任何菜单都不可见
+        Set<Long> allowedMenuIds = sysTenantService.allowedMenuIds(TenantContext.get());
+        if (allowedMenuIds != null && allowedMenuIds.isEmpty()) {
+            return List.of();
+        }
+
+        LambdaQueryWrapper<SysMenu> wrapper = new LambdaQueryWrapper<SysMenu>()
+                .eq(SysMenu::getTenantId, DEFAULT_TENANT_ID)
+                .eq(SysMenu::getDeleted, 0)
+                .eq(SysMenu::getStatus, STATUS_ENABLED)
+                .in(SysMenu::getId, menuIds)
+                .in(allowedMenuIds != null, SysMenu::getId, allowedMenuIds)
+                .eq(menuType != null, SysMenu::getMenuType, menuType)
+                .orderByAsc(SysMenu::getSort)
+                .orderByAsc(SysMenu::getId);
+
+        return buildTree(sysMenuMapper.selectList(wrapper));
+    }
+
+    /**
+     * 按 parent_id 组装树；父节点不在结果集中时提升为根，避免整棵子树从后台消失。
+     */
+    private List<MenuNode> buildTree(List<SysMenu> menus) {
         if (menus == null || menus.isEmpty()) {
             return List.of();
         }
@@ -88,7 +144,6 @@ public class SysMenuServiceImpl implements SysMenuService {
 
         List<MenuNode> roots = new ArrayList<>();
         for (SysMenu menu : menus) {
-            // 父节点被过滤或已删除时提升为根，避免整棵子树从后台消失
             if (!presentIds.contains(menu.getParentId())) {
                 roots.add(buildNode(menu, childrenByParent, new HashSet<>()));
             }

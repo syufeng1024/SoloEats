@@ -25,7 +25,7 @@ const form = reactive<LoginForm>({
   role: ROLES.MERCHANT,
   merchantId: '1',
   shopId: '1',
-  userId: '0',
+  userId: '1',
 })
 
 function intValidator(label: string, required: boolean, allowZero: boolean) {
@@ -51,7 +51,7 @@ function intValidator(label: string, required: boolean, allowZero: boolean) {
 const rules: FormRules = {
   merchantId: [{ validator: intValidator('商家 ID', true, false), trigger: 'blur' }],
   shopId: [{ validator: intValidator('门店 ID', false, false), trigger: 'blur' }],
-  userId: [{ validator: intValidator('管理员用户 ID', false, true), trigger: 'blur' }],
+  userId: [{ validator: intValidator('管理员用户 ID', true, false), trigger: 'blur' }],
 }
 
 async function handleSubmit(): Promise<void> {
@@ -66,7 +66,9 @@ async function handleSubmit(): Promise<void> {
     if (form.shopId.trim()) {
       payload.shopId = Number(form.shopId.trim())
     }
-  } else if (form.userId.trim()) {
+  } else {
+    // 管理员/骑手必须带真实 userId：后端菜单接口按 userId 查角色菜单，
+    // 传 0 或省略会让 /api/v1/auth/menus 返回空、侧边栏退回硬编码菜单。
     payload.userId = Number(form.userId.trim())
   }
 

@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { login as loginApi } from '@/api/auth'
 import type { LoginPayload } from '@/api/types'
 import { matchesRole } from '@/constants/roles'
+import { useMenuStore } from './menu'
 import {
   clearAuth,
   isAuthExpired,
@@ -41,6 +42,8 @@ export const useAuthStore = defineStore('auth', () => {
   function logout(): void {
     clearAuth()
     session.value = null
+    // 菜单按账号拉取，退出时必须清空，避免下一个账号复用上一个账号的菜单
+    useMenuStore().reset()
   }
 
   function hasRole(role: string): boolean {
