@@ -143,7 +143,7 @@ import { clearIdempotencyKey, issueIdempotencyKey } from '@/utils/request'
 import { useAuthStore } from '@/stores/auth'
 
 interface DetailAction {
-  key: 'pay' | 'cancel' | 'track' | 'pickup' | 'review'
+  key: 'pay' | 'cancel' | 'track' | 'pickup' | 'review' | 'refund'
   label: string
   type: 'primary' | 'ghost' | 'plain'
 }
@@ -215,6 +215,13 @@ const actions = computed<DetailAction[]>(() => {
   }
   if (current.status === ORDER_STATUS.WAIT_ACCEPT) {
     result.push({ key: 'cancel', label: '取消订单', type: 'plain' })
+  }
+  // 与后端 RefundServiceImpl#assertRefundable 一致：待接单、备餐中可整单退款
+  if (
+    [ORDER_STATUS.WAIT_ACCEPT, ORDER_STATUS.PREPARING].includes(current.status) &&
+    !(current.refundedAmount && current.refundedAmount > 0)
+  ) {
+    result.push({ key: 'refund', label: '申请退款', type: 'ghost' })
   }
   if (
     current.fulfillmentType === 1 &&
@@ -357,6 +364,9 @@ function handleAction(key: DetailAction['key']): void {
   if (key === 'review') {
     // UserOrderItemView 未返回 orderItemId，评价页会提示该缺口
     uni.navigateTo({ url: `/pages/review/ReviewForm?orderId=${current.orderId}&shopId=${current.shopId}` })
+  }
+  if (key === 'refund') {
+    uni.navigateTo({ url: `/pages/afterSale/Apply?orderId=${current.orderId}` })
   }
 }
 

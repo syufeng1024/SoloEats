@@ -68,6 +68,62 @@
       }
     },
     {
+      "path": "pages/review/List",
+      "style": {
+        "navigationBarTitleText": "我的评价",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/review/Detail",
+      "style": {
+        "navigationBarTitleText": "评价详情"
+      }
+    },
+    {
+      "path": "pages/address/List",
+      "style": {
+        "navigationBarTitleText": "收货地址",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/address/Edit",
+      "style": {
+        "navigationBarTitleText": "编辑地址"
+      }
+    },
+    {
+      "path": "pages/address/Region",
+      "style": {
+        "navigationBarTitleText": "地址填写帮助"
+      }
+    },
+    {
+      "path": "pages/afterSale/Apply",
+      "style": {
+        "navigationBarTitleText": "申请售后"
+      }
+    },
+    {
+      "path": "pages/afterSale/List",
+      "style": {
+        "navigationBarTitleText": "售后记录"
+      }
+    },
+    {
+      "path": "pages/afterSale/Detail",
+      "style": {
+        "navigationBarTitleText": "售后详情"
+      }
+    },
+    {
+      "path": "pages/afterSale/Policy",
+      "style": {
+        "navigationBarTitleText": "退款规则"
+      }
+    },
+    {
       "path": "pages/search/Search",
       "style": {
         "navigationBarTitleText": "搜索"

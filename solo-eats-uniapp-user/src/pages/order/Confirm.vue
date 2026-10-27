@@ -154,7 +154,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { checkDelivery, estimateFreight, fetchShopDetail } from '@/api/shop'
 import { fetchAddresses } from '@/api/user'
 import { createOrder } from '@/api/order'
@@ -173,6 +173,8 @@ const shop = ref<ShopDetailVO | null>(null)
 const fulfillmentType = ref<1 | 2>(1)
 const addresses = ref<AddressVO[]>([])
 const selectedAddressId = ref<number | null>(null)
+/** 地址簿里新增后直接选中的地址，可能不在 bootstrap 时拉到的列表里 */
+const selectedAddressSnapshot = ref<AddressVO | null>(null)
 const receiverName = ref('')
 const receiverPhone = ref('')
 const pickupPhone = ref('')
@@ -206,9 +208,14 @@ const minOrderAmount = computed(
 const belowMin = computed(() => goodsAmount.value < minOrderAmount.value)
 const canPickup = computed(() => shop.value?.pickupEnabled === 1)
 
-const selectedAddress = computed<AddressVO | null>(
-  () => addresses.value.find((address) => address.id === selectedAddressId.value) || null,
-)
+const selectedAddress = computed<AddressVO | null>(() => {
+  const fromList = addresses.value.find((address) => address.id === selectedAddressId.value)
+  if (fromList) {
+    return fromList
+  }
+  const snapshot = selectedAddressSnapshot.value
+  return snapshot && snapshot.id === selectedAddressId.value ? snapshot : null
+})
 
 const fullAddress = computed(() => {
   const address = selectedAddress.value
@@ -231,6 +238,8 @@ onLoad((options) => {
   if (!auth.ensureLogin(`/pages/order/Confirm?shopId=${id}`)) {
     return
   }
+  // 地址列表页选中后通过全局事件回传，避免依赖页面栈层级
+  uni.$on('address:selected', onAddressSelected)
   cart.load(id)
   if (cart.lines(id).length === 0) {
     loading.value = false
@@ -238,6 +247,10 @@ onLoad((options) => {
     return
   }
   bootstrap()
+})
+
+onUnload(() => {
+  uni.$off('address:selected', onAddressSelected)
 })
 
 async function bootstrap(): Promise<void> {
@@ -285,29 +298,26 @@ function prefillContact(): void {
 }
 
 function chooseAddress(): void {
-  if (addresses.value.length === 0) {
-    uni.showToast({ title: '暂无收货地址，地址管理在阶段B开放', icon: 'none' })
-    return
-  }
-  uni.showActionSheet({
-    itemList: addresses.value.map(
-      (address) => `${address.receiverName} ${address.receiverPhone} ${fullAddressOf(address)}`,
-    ),
-    success: (result) => {
-      const target = addresses.value[result.tapIndex]
-      if (!target) {
-        return
-      }
-      selectedAddressId.value = target.id
-      receiverName.value = target.receiverName
-      refreshFees()
-    },
+  // 进入地址簿的 select 模式；选中后由 address:selected 事件回传
+  uni.navigateTo({
+    url: `/pages/address/List?mode=select&selectedId=${selectedAddressId.value || ''}`,
   })
 }
 
-function fullAddressOf(address: AddressVO): string {
-  const parts = [address.province, address.city, address.district, address.address, address.houseNumber]
-  return parts.filter((part) => Boolean(part)).join('')
+function onAddressSelected(address: AddressVO): void {
+  if (!address || !address.id) {
+    return
+  }
+  const index = addresses.value.findIndex((item) => item.id === address.id)
+  if (index >= 0) {
+    addresses.value[index] = address
+  } else {
+    addresses.value.push(address)
+  }
+  selectedAddressSnapshot.value = address
+  selectedAddressId.value = address.id
+  receiverName.value = address.receiverName
+  refreshFees()
 }
 
 function switchFulfillment(type: 1 | 2): void {

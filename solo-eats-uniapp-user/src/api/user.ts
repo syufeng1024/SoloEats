@@ -32,6 +32,49 @@ export function fetchAddresses(): Promise<AddressVO[]> {
   return request<AddressVO[]>({ url: '/v1/c/addresses' })
 }
 
+/** 对齐后端 SaveAddressRequest：receiverName/receiverPhone/address 必填。 */
+export interface SaveAddressPayload {
+  receiverName: string
+  receiverPhone: string
+  province?: string | null
+  city?: string | null
+  district?: string | null
+  address: string
+  houseNumber?: string | null
+  lng?: number | null
+  lat?: number | null
+  tag?: string | null
+  isDefault?: boolean | null
+}
+
+/** POST /c/addresses，首条地址后端自动设为默认。 */
+export function createAddress(payload: SaveAddressPayload): Promise<AddressVO> {
+  return request<AddressVO>({
+    url: '/v1/c/addresses',
+    method: 'POST',
+    data: payload,
+  })
+}
+
+/** PUT /c/addresses/{id}，归属不符后端返回 10004。 */
+export function updateAddress(id: number, payload: SaveAddressPayload): Promise<AddressVO> {
+  return request<AddressVO>({
+    url: `/v1/c/addresses/${id}`,
+    method: 'PUT',
+    data: payload,
+  })
+}
+
+/** DELETE /c/addresses/{id} */
+export function deleteAddress(id: number): Promise<void> {
+  return request<void>({ url: `/v1/c/addresses/${id}`, method: 'DELETE' })
+}
+
+/** PUT /c/addresses/{id}/default */
+export function setDefaultAddress(id: number): Promise<void> {
+  return request<void>({ url: `/v1/c/addresses/${id}/default`, method: 'PUT' })
+}
+
 /** GET /c/wallet。silent 用于「我的」聚合加载，避免多个请求同时失败时连弹 toast。 */
 export function fetchWallet(silent = false): Promise<WalletVO> {
   return request<WalletVO>({ url: '/v1/c/wallet', silent })

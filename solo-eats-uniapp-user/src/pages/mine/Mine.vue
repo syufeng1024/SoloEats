@@ -83,6 +83,14 @@
         <text class="mine__grid-icon">址</text>
         <text class="mine__grid-text">收货地址</text>
       </view>
+      <view class="mine__grid-item" @click="goReviews">
+        <text class="mine__grid-icon">评</text>
+        <text class="mine__grid-text">我的评价</text>
+      </view>
+      <view class="mine__grid-item" @click="goAfterSale">
+        <text class="mine__grid-icon">售</text>
+        <text class="mine__grid-text">售后记录</text>
+      </view>
       <view class="mine__grid-item" @click="goTickets">
         <text class="mine__grid-icon">工</text>
         <text class="mine__grid-text">我的工单</text>
@@ -407,8 +415,24 @@ function goOrders(): void {
 }
 
 function openAddress(): void {
-  // 本批 8 个页面未包含地址管理页，先给出明确提示，避免点了没反应
-  uni.showToast({ title: '地址管理待开放，可在下单页选择收货地址', icon: 'none' })
+  if (!auth.ensureLogin('/pages/mine/Mine')) {
+    return
+  }
+  uni.navigateTo({ url: '/pages/address/List' })
+}
+
+function goReviews(): void {
+  if (!auth.ensureLogin('/pages/mine/Mine')) {
+    return
+  }
+  uni.navigateTo({ url: '/pages/review/List' })
+}
+
+function goAfterSale(): void {
+  if (!auth.ensureLogin('/pages/mine/Mine')) {
+    return
+  }
+  uni.navigateTo({ url: '/pages/afterSale/List' })
 }
 
 function goTickets(): void {

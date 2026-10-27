@@ -128,6 +128,34 @@ export function fetchDeliveryTrack(deliveryId: number, silent = false): Promise<
   return request<DeliveryTrackVO>({ url: `/v1/c/deliveries/${deliveryId}/track`, silent })
 }
 
+/** POST /orders/{orderId}/refund → RefundVO，后端同步调用支付网关并返回退款单。 */
+export interface RefundResultVO {
+  refundId: number
+  refundNo: string
+  orderId: number
+  amount: number
+  refundStatus: number
+  orderStatus: number
+  channelRefundNo: string | null
+}
+
+/**
+ * 用户端整单退款。必须带 Idempotency-Key，失败重试复用同一个 key。
+ * 后端只允许「待接单 / 备餐中」订单，其余状态返回 ORDER_STATUS_INVALID。
+ */
+export function applyRefund(
+  orderId: number,
+  reason: string,
+  idempotencyKey: string,
+): Promise<RefundResultVO> {
+  return request<RefundResultVO>({
+    url: `/v1/orders/${orderId}/refund`,
+    method: 'POST',
+    idempotencyKey,
+    data: { reason },
+  })
+}
+
 /** GET /c/review-tags：评价标签字典 */
 export function fetchReviewTags(): Promise<ReviewTagVO[]> {
   return request<ReviewTagVO[]>({ url: '/v1/c/review-tags' })
