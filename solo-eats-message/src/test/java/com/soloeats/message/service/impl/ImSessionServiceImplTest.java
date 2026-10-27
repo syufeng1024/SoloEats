@@ -289,6 +289,69 @@ class ImSessionServiceImplTest {
         verify(imMessageMapper).selectPage(SESSION_ID, null, 20);
     }
 
+    @Test
+    @DisplayName("坐席已接待后以 subjectType=4 发送：senderType=4、senderId=坐席ID")
+    void agentCanSendAfterTakingSession() {
+        long agentA = 88L;
+        when(imSessionMapper.selectById(SESSION_ID)).thenReturn(csSessionWithPeer(0, agentA, 9000L));
+        when(imMessageMapper.insert(ArgumentMatchers.<ImMessage>any())).thenAnswer(invocation -> {
+            ImMessage inserted = invocation.getArgument(0);
+            inserted.setId(MESSAGE_ID);
+            return 1;
+        });
+        when(imSessionMapper.updateLastMessage(eq(SESSION_ID), anyString(), any(LocalDateTime.class)))
+                .thenReturn(1);
+        when(imSessionMapper.incUserUnread(SESSION_ID)).thenReturn(1);
+
+        ImMessageView view = imSessionService.send(SESSION_ID, 4, agentA, 1, "稍等，我查一下", null);
+
+        assertThat(view.id()).isEqualTo(MESSAGE_ID);
+        assertThat(view.senderType()).isEqualTo(4);
+        assertThat(view.senderId()).isEqualTo(agentA);
+        assertThat(view.content()).isEqualTo("稍等，我查一下");
+    }
+
+    @Test
+    @DisplayName("待接待会话（agent_id 为空）坐席发送抛 90003，必须先接待")
+    void agentCannotSendToWaitingSession() {
+        long agentA = 88L;
+        when(imSessionMapper.selectById(SESSION_ID)).thenReturn(csSessionWithPeer(0, null, 9000L));
+
+        assertBizCode(() -> imSessionService.send(SESSION_ID, 4, agentA, 1, "你好", null),
+                ErrorCode.IM_NOT_PARTICIPANT);
+        verify(imMessageMapper, never()).insert(ArgumentMatchers.<ImMessage>any());
+    }
+
+    @Test
+    @DisplayName("会话已被 A 坐席接待，B 坐席发送抛 90003")
+    void otherAgentCannotSend() {
+        long agentA = 88L;
+        long agentB = 99L;
+        when(imSessionMapper.selectById(SESSION_ID)).thenReturn(csSessionWithPeer(0, agentA, 9000L));
+
+        assertBizCode(() -> imSessionService.send(SESSION_ID, 4, agentB, 1, "你好", null),
+                ErrorCode.IM_NOT_PARTICIPANT);
+        verify(imMessageMapper, never()).insert(ArgumentMatchers.<ImMessage>any());
+    }
+
+    @Test
+    @DisplayName("坐席发送后消费者侧未读 +1，坐席侧未读不变")
+    void agentSendIncrementsUserUnreadOnly() {
+        long agentA = 88L;
+        when(imSessionMapper.selectById(SESSION_ID)).thenReturn(csSessionWithPeer(0, agentA, 9000L));
+
+        imSessionService.send(SESSION_ID, 4, agentA, 1, "稍等", null);
+
+        verify(imSessionMapper).incUserUnread(SESSION_ID);
+        verify(imSessionMapper, never()).incPeerUnread(anyLong());
+    }
+
+    private ImSession csSessionWithPeer(int status, Long agentId, long peerId) {
+        ImSession session = session(USER_ID, 4, peerId, status);
+        session.setAgentId(agentId);
+        return session;
+    }
+
     private ImMessage message() {
         ImMessage message = new ImMessage();
         message.setId(MESSAGE_ID);

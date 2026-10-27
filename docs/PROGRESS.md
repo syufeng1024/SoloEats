@@ -37,7 +37,7 @@
 | **T16** 结算 | A | 结算单审核→模拟打款、提现闭环 |
 | **T11** 报表 | A | **阶段A 已交付**：`solo-eats-report` 模块、6 张报表表（阶段A 填充平台/门店日报）、工作台实时卡 `GET /api/v1/admin/report/dashboard`、经营总览 `GET /api/v1/admin/report/overview`（日/周/月）、02:30 日聚合 + 每 5 分钟当日刷新；另保留既有 `GET /api/v1/merchant/report/dashboard` |
 | **T17** 运营后台与商家中心 | 批次0 | **P0 收口**：运营后台新增商家入驻审核、门店管理、商品库列表、基础券管理 4 组 6 页 + 工作台 7 张今日卡；`solo-eats-web/shared/` 共享层抽出；`solo-eats-web-merchant/` 独立商家中心工程（base `/merchant/`，复制 3 个商家视图）。两条 `npm run build` 均通过，单测 10/10 |
-| **T09** 客服工单 | A / B | 新建 `solo-eats-service` 模块、6 张表（`t_service_ticket`/`t_ticket_record`/`t_complaint`/`t_faq`/`t_feedback`/`t_quick_reply`）；工单状态机 `0→1→2→3`、仅允许 `→4` 关闭；C 端提交/查询/撤单/评价、投诉、FAQ、意见反馈 8 端点；后台受理/指派/处理/回访/办结/关闭、投诉责任判定、FAQ 维护、反馈回复、工单统计 12 端点。**阶段B**：`t_im_session` 增量加 `agent_id`（V28，带 `idx_agent_status`）、坐席端会话列表/接待/转接/结束（条件更新防双接待，`90005`）、会话记录、快捷话术 CRUD（`t_quick_reply` 逻辑删除）、坐席统计 `GET /admin/cs/stats`，共 7 端点（接口 21~27） |
+| **T09** 客服工单 | A / B | 新建 `solo-eats-service` 模块、6 张表（`t_service_ticket`/`t_ticket_record`/`t_complaint`/`t_faq`/`t_feedback`/`t_quick_reply`）；工单状态机 `0→1→2→3`、仅允许 `→4` 关闭；C 端提交/查询/撤单/评价、投诉、FAQ、意见反馈 8 端点；后台受理/指派/处理/回访/办结/关闭、投诉责任判定、FAQ 维护、反馈回复、工单统计 12 端点。**阶段B**：`t_im_session` 增量加 `agent_id`（V28，带 `idx_agent_status`）、坐席端会话列表/接待/转接/结束（条件更新防双接待，`90005`）、会话记录、快捷话术 CRUD（`t_quick_reply` 逻辑删除）、坐席统计 `GET /admin/cs/stats`、坐席发消息 `POST /admin/cs/sessions/{id}/messages`，共 8 端点（接口 21~28） |
 | **T10** 内容装修 | 全 | 新建 `solo-eats-content` 模块、5 张表（`t_home_page`/`t_home_floor`/`t_banner`/`t_search_keyword`/`t_app_version`）；首页楼层 CRUD + 排序 + 发布（引用 categoryId/shopId/spuId 校验，失败 `90020`）、Banner 维护、搜索词四类维护 + 联想屏蔽词过滤、App 版本三端维护 + 灰度（`userId`/`deviceId` 取模）+ 强制更新；用户端 `/c/home` 聚合（Redis 缓存、无 N+1）、`/c/banners`、`/c/search/suggest`、`/c/app/version` |
 
 **可完整跑通的主链路**：
@@ -61,7 +61,7 @@
 
 | 任务卡 | 缺口 |
 |---|---|
-| T09 客服工单 | **阶段A/B 均已完成（接口 1~27）**；遗留：坐席「接收会话消息」页面未做（属 T17），会话接待量未并入 `/admin/tickets/stats`（改由 `/admin/cs/stats` 提供） |
+| T09 客服工单 | **阶段A/B 均已完成（接口 1~28）**；遗留：坐席「接收会话消息」页面未做（属 T17），会话接待量未并入 `/admin/tickets/stats`（改由 `/admin/cs/stats` 提供） |
 | T10 内容装修 | **已交付**（5 张表 + 14 端点）；遗留见 T10 执行记录：投放人群 `audience=1/2` 用未登录/已登录近似、`click_count` 无埋点自增接口、首页 P95 未压测 |
 | T11 阶段B | 经营/流量/商品/财务报表 |
 | T12 阶段A/B | 阶梯满减、商家满减、秒杀、会员等级、积分、签到 |

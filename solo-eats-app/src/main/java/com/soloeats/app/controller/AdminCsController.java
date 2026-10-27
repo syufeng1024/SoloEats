@@ -1,6 +1,7 @@
 package com.soloeats.app.controller;
 
 import com.soloeats.app.dto.SaveQuickReplyRequest;
+import com.soloeats.app.dto.SendSessionMessageRequest;
 import com.soloeats.app.dto.TransferSessionRequest;
 import com.soloeats.common.api.ApiResponse;
 import com.soloeats.common.api.PageResult;
@@ -9,6 +10,7 @@ import com.soloeats.common.auth.RequirePermission;
 import com.soloeats.common.auth.RequireRole;
 import com.soloeats.common.auth.Roles;
 import com.soloeats.common.auth.UserPrincipal;
+import com.soloeats.message.domain.enums.ReceiverType;
 import com.soloeats.message.service.ImSessionService;
 import com.soloeats.message.service.view.AgentSessionView;
 import com.soloeats.message.service.view.ImMessageView;
@@ -98,6 +100,21 @@ public class AdminCsController {
         UserPrincipal principal = AuthContext.require();
         return ApiResponse.ok(imSessionService.agentMessages(
                 id, principal.userId(), beforeMessageId, pageSize));
+    }
+
+    /**
+     * 坐席端发送消息。判权在 ImSessionService#send：客服会话按 agent_id 认定参与者，
+     * 待接待会话（agent_id 为空）仍返回 90003，必须先接待再发言。
+     */
+    @RequirePermission("service:cs:handle")
+    @PostMapping("/sessions/{id}/messages")
+    public ApiResponse<ImMessageView> sendMessage(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody SendSessionMessageRequest request) {
+        UserPrincipal principal = AuthContext.require();
+        return ApiResponse.ok(imSessionService.send(
+                id, ReceiverType.PLATFORM.getCode(), principal.userId(),
+                request.msgType(), request.content(), request.extraJson()));
     }
 
     // ------------------------------------------------------------ 快捷话术

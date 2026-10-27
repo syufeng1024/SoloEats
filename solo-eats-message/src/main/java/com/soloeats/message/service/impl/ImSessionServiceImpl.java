@@ -421,10 +421,16 @@ public class ImSessionServiceImpl implements ImSessionService {
         if (session == null) {
             throw new BizException(ErrorCode.IM_SESSION_NOT_FOUND);
         }
+        // 第三个分支只对客服会话生效：坐席经 agent_id 关联会话（take/transfer 后改写），
+        // peer_id 是建会话时的客服占位值，与坐席 ID 无关，不能作为坐席参与者的判据。
+        // agent_id 为 NULL 的待接待会话仍不成立，坐席必须先接待才能发言。
         boolean participant = (subjectType == SUBJECT_USER
                 && Objects.equals(session.getUserId(), subjectId))
                 || (Objects.equals(session.getPeerType(), subjectType)
-                && Objects.equals(session.getPeerId(), subjectId));
+                && Objects.equals(session.getPeerId(), subjectId))
+                || (Objects.equals(session.getPeerType(), PEER_TYPE_CS)
+                && session.getAgentId() != null
+                && Objects.equals(session.getAgentId(), subjectId));
         if (!participant) {
             throw new BizException(ErrorCode.IM_NOT_PARTICIPANT);
         }
