@@ -6,6 +6,7 @@ import com.soloeats.store.service.command.SaveShopCommand;
 import com.soloeats.store.service.view.ShopDetailView;
 import com.soloeats.store.service.view.ShopView;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 public interface ShopService {
@@ -62,4 +63,18 @@ public interface ShopService {
             String nextEndTime
     ) {
     }
+
+    /**
+     * 评价联动刷新门店评分（T05：评价通过审核后按近 90 天均分更新）。
+     *
+     * <p>仅供内部服务调用，不暴露给商家侧接口——商家不允许自行改 rating。
+     * 四个分项均可能为 null（该门店 90 天内无已审核评价），此时保留门店原值不动。
+     *
+     * @return 是否命中并更新了门店
+     */
+    boolean refreshRating(Long shopId,
+                          BigDecimal rating,
+                          BigDecimal ratingTaste,
+                          BigDecimal ratingPackage,
+                          BigDecimal ratingDelivery);
 }

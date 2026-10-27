@@ -10,6 +10,7 @@ import com.soloeats.product.domain.entity.ProductReview;
 import com.soloeats.product.domain.entity.ReviewTag;
 import com.soloeats.product.mapper.ProductReviewMapper;
 import com.soloeats.product.mapper.ReviewTagMapper;
+import com.soloeats.product.service.event.ReviewAuditedEvent;
 import com.soloeats.product.service.ProductReviewService;
 import com.soloeats.product.service.ReviewOrderPort;
 import com.soloeats.product.service.command.AppendReviewCommand;
@@ -25,6 +26,7 @@ import com.soloeats.store.service.view.ShopView;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,6 +63,7 @@ public class ProductReviewServiceImpl implements ProductReviewService {
     private final ShopService shopService;
     private final ProductProperties productProperties;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${app.order.after-sales-days:7}")
     private int afterSalesDays = 7;
@@ -269,7 +272,11 @@ public class ProductReviewServiceImpl implements ProductReviewService {
             throw new BizException(ErrorCode.PARAM_INVALID, "topFlag 只能是 0 或 1");
         }
         productReviewMapper.audit(id, targetStatus, targetTop);
-        // 评分联动属于跨模块异步任务（t_shop.rating），本卡不修改 store 模块，留待 T12/T17。
+        // T05 评分联动：审核事务提交后异步重算门店评分（取近 90 天均值）。
+        // 走到这里已通过参数校验，只要门店存在就发事件；同步失败不影响审核结果。
+        if (review.getShopId() != null) {
+            eventPublisher.publishEvent(new ReviewAuditedEvent(review.getShopId()));
+        }
         return toView(productReviewMapper.selectById(id));
     }
 

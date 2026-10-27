@@ -18,6 +18,7 @@ import com.soloeats.store.service.ShopService;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -37,11 +38,12 @@ class ProductReviewServiceImplTest {
     private final ReviewTagMapper reviewTagMapper = mock(ReviewTagMapper.class);
     private final ReviewOrderPort reviewOrderPort = mock(ReviewOrderPort.class);
     private final ShopService shopService = mock(ShopService.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final AtomicReference<ProductReview> saved = new AtomicReference<>();
 
     private final ProductReviewServiceImpl service = new ProductReviewServiceImpl(
             reviewMapper, reviewTagMapper, reviewOrderPort, shopService,
-            new ProductProperties(), new ObjectMapper());
+            new ProductProperties(), new ObjectMapper(), eventPublisher);
 
     @BeforeAll
     static void initTableInfo() {

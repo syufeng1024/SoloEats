@@ -766,4 +766,20 @@ public class ShopServiceImpl implements ShopService {
                 shop.getCreatedAt(),
                 shop.getUpdatedAt());
     }
+
+    @Override
+    public boolean refreshRating(Long shopId,
+                                 BigDecimal rating,
+                                 BigDecimal ratingTaste,
+                                 BigDecimal ratingPackage,
+                                 BigDecimal ratingDelivery) {
+        if (shopId == null || shopId <= 0L) {
+            return false;
+        }
+        if (rating == null && ratingTaste == null && ratingPackage == null && ratingDelivery == null) {
+            // 90 天内没有已审核评价：没有可算的均分，保留门店原评分，避免被清成 null
+            return false;
+        }
+        return shopMapper.refreshRating(shopId, rating, ratingTaste, ratingPackage, ratingDelivery) > 0;
+    }
 }
