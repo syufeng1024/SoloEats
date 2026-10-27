@@ -222,21 +222,4 @@ public class OrderController {
                 )
         ));
     }
-
-    @RequireRole(Roles.C_USER)
-    @GetMapping
-    public ApiResponse<PageResult<UserOrderView>> list(
-            @RequestParam(required = false) Integer status,
-            @RequestParam(defaultValue = "1") int pageNum,
-            @RequestParam(defaultValue = "10") int pageSize) {
-        return ApiResponse.ok(orderQueryService.pageUserOrders(
-                AuthContext.require().userId(), status, pageNum, pageSize));
-    }
-
-    @RequireRole(Roles.C_USER)
-    @GetMapping("/{orderId}")
-    public ApiResponse<UserOrderDetailView> detail(@PathVariable Long orderId) {
-        return ApiResponse.ok(orderQueryService.getUserOrder(
-                AuthContext.require().userId(), orderId));
-    }
 }
