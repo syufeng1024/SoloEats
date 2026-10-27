@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -31,6 +32,7 @@ const STATUS_TABS = [
 
 const auth = useAuthStore()
 const shop = useShopStore()
+const router = useRouter()
 
 const loading = ref(false)
 const loadError = ref('')
@@ -113,6 +115,10 @@ function itemSummary(row: MerchantOrderView): string {
     return `${first.skuName} ×${first.quantity}`
   }
   return `${first.skuName} 等 ${row.items.length} 种 / ${count} 件`
+}
+
+function openReceipt(row: MerchantOrderView): void {
+  void router.push(`/orders/${row.orderId}/receipt`)
 }
 
 async function handleAccept(row: MerchantOrderView): Promise<void> {
@@ -323,6 +329,7 @@ onMounted(load)
                 </el-button>
               </template>
               <span v-else class="muted">—</span>
+              <el-button link type="primary" @click="openReceipt(row)">小票</el-button>
             </div>
           </template>
         </el-table-column>

@@ -79,6 +79,53 @@ export interface MerchantOrderView {
   items: MerchantOrderItemView[]
 }
 
+/** UserOrderItemView.java，商家订单详情里的商品行；unitPrice/originalAmount 单位为分 */
+export interface UserOrderItemView {
+  orderItemId: number
+  skuId: number | null
+  skuName: string
+  quantity: number
+  unitPrice: number
+  originalAmount: number
+  payableAmount: number
+}
+
+/** OrderTimelineView.java，fromStatus 为 null 表示建单节点 */
+export interface OrderTimelineView {
+  fromStatus: number | null
+  fromStatusName: string | null
+  toStatus: number
+  toStatusName: string
+  event: string
+  operatorType: number
+  createdAt: string
+}
+
+/** MerchantOrderDetailView.java，金额单位分；receiverPhoneMask 已是脱敏号码 */
+export interface MerchantOrderDetailView {
+  orderId: number
+  orderNo: string
+  shopId: number
+  status: number
+  statusName: string
+  fulfillmentType: number
+  fulfillmentTypeName: string
+  goodsAmount: number
+  packagingFee: number
+  deliveryFee: number
+  payAmount: number
+  receiverName: string | null
+  receiverPhoneMask: string | null
+  receiverAddress: string | null
+  remark: string | null
+  pickupCode: string | null
+  pickupReadyAt: string | null
+  createdAt: string
+  paidAt: string | null
+  items: UserOrderItemView[]
+  timeline: OrderTimelineView[]
+}
+
 export interface AdminOrderView {
   orderId: number
   orderNo: string
@@ -379,6 +426,20 @@ export interface ShopDetailView extends ShopView {
   settleAccountId: number | null
   businessHours: ShopBusinessHourView[]
   updatedAt: string
+}
+
+/** ShopAccountView.java，accountRole 1店长 2店员，status 0启用 1停用 */
+export interface ShopAccountView {
+  id: number
+  shopId: number
+  userId: number
+  username: string | null
+  nickname: string | null
+  accountRole: number
+  accountRoleText: string
+  isDefault: number
+  status: number
+  createdAt: string
 }
 
 /** CategoryNode.java */

@@ -2,7 +2,18 @@
 import { computed, onMounted, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Goods, Shop, SwitchButton, Tickets, Wallet } from '@element-plus/icons-vue'
+import {
+  Brush,
+  CircleCheck,
+  Goods,
+  Setting,
+  Shop,
+  SwitchButton,
+  Tickets,
+  Timer,
+  User,
+  Wallet,
+} from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useShopStore } from '@/stores/shop'
 import { ROLES, roleLabel } from '@/constants/roles'
@@ -15,7 +26,12 @@ interface MenuItem {
 
 const MENU_ITEMS: MenuItem[] = [
   { path: '/orders', label: '订单管理', icon: Tickets },
+  { path: '/pickup', label: '取餐核销', icon: CircleCheck },
   { path: '/products', label: '商品与库存', icon: Goods },
+  { path: '/shop/setting', label: '门店设置', icon: Setting },
+  { path: '/shop/pickup', label: '自取设置', icon: Timer },
+  { path: '/shop/decoration', label: '门店装修', icon: Brush },
+  { path: '/shop/accounts', label: '门店账号', icon: User },
   { path: '/settlements', label: '财务结算', icon: Wallet },
 ]
 
@@ -28,6 +44,10 @@ const menuItems = computed(() =>
   MENU_ITEMS.filter(() => auth.hasRole(ROLES.MERCHANT)),
 )
 const pageTitle = computed(() => route.meta.title ?? '商家中心')
+// 订单小票是 /orders/:orderId/receipt，仍高亮订单管理
+const activeMenu = computed(() =>
+  route.path.startsWith('/orders') ? '/orders' : route.path,
+)
 const shopOptions = computed(() =>
   shop.shops.map((item) => ({
     id: item.id,
@@ -85,7 +105,7 @@ onMounted(loadShops)
       </div>
 
       <el-menu
-        :default-active="route.path"
+        :default-active="activeMenu"
         router
         class="app-menu"
         background-color="transparent"

@@ -2,6 +2,7 @@ import { request } from './http'
 import { createIdempotencyKey } from '../utils/idempotency'
 import type {
   CancelVO,
+  MerchantOrderDetailView,
   MerchantOrderView,
   OrderStatusVO,
   PageResult,
@@ -25,6 +26,26 @@ export function listMerchantOrders(
     url: '/v1/merchant/orders',
     method: 'GET',
     params,
+  })
+}
+
+/** GET /api/v1/merchant/orders/{orderId}，商家订单详情（含商品明细与时间轴） */
+export function getMerchantOrderDetail(orderId: number): Promise<MerchantOrderDetailView> {
+  return request<MerchantOrderDetailView>({
+    url: `/v1/merchant/orders/${orderId}`,
+    method: 'GET',
+  })
+}
+
+/**
+ * POST /api/v1/merchant/orders/{orderId}/pickup/verify
+ * 自取核销：WAIT_USER_PICKUP(31) -> PICKED_UP(51)；重复核销返回 ORDER_STATUS_INVALID。
+ */
+export function verifyMerchantPickup(orderId: number, pickupCode: string): Promise<OrderStatusVO> {
+  return request<OrderStatusVO>({
+    url: `/v1/merchant/orders/${orderId}/pickup/verify`,
+    method: 'POST',
+    data: { pickupCode },
   })
 }
 

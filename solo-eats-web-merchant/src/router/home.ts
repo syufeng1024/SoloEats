@@ -14,7 +14,7 @@ export function isRedirectAllowed(path: string, roles: string[]): boolean {
   if (!hasAnyRole(roles, ROLES.MERCHANT)) {
     return false
   }
-  return ['/orders', '/products', '/settlements'].some(
+  return ['/orders', '/pickup', '/products', '/settlements', '/shop'].some(
     (prefix) => path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(`${prefix}?`),
   )
 }
