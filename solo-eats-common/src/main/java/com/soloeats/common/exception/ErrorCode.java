@@ -29,6 +29,7 @@ public enum ErrorCode {
     PAYMENT_CONFLICT(30005, "支付单冲突", HttpStatus.CONFLICT),
     REFUND_GATEWAY_FAILED(30006, "退款网关处理失败", HttpStatus.CONFLICT),
     REFUND_STATE_INVALID(30007, "退款单状态不一致", HttpStatus.CONFLICT),
+    REFUND_NOT_FOUND(30008, "退款单不存在", HttpStatus.NOT_FOUND),
 
     STOCK_NOT_ENOUGH(40001, "库存不足", HttpStatus.CONFLICT),
     COUPON_LOCK_FAILED(40002, "优惠券锁定失败", HttpStatus.CONFLICT),

@@ -66,6 +66,32 @@ const router = createRouter({
           component: () => import('@/views/admin/AdminSettlementsView.vue'),
           meta: { roles: ['ADMIN'], title: '抽成结算' },
         },
+        // 订单中心：后端仅用 @RequireRole(ADMIN)，没有对应 t_sys_menu 子菜单，
+        // 这里登记静态路由，保证侧边栏兜底菜单和直接访问都能落地。
+        {
+          path: 'order/list',
+          name: 'admin-order-list',
+          component: () => import('@/views/order/index.vue'),
+          meta: { roles: ['ADMIN'], title: '订单列表' },
+        },
+        {
+          path: 'order/detail/:orderId',
+          name: 'admin-order-detail',
+          component: () => import('@/views/order/detail.vue'),
+          meta: { roles: ['ADMIN'], title: '订单详情' },
+        },
+        {
+          path: 'order/exception',
+          name: 'admin-order-exception',
+          component: () => import('@/views/order/exception.vue'),
+          meta: { roles: ['ADMIN'], title: '异常订单池' },
+        },
+        {
+          path: 'refund/list',
+          name: 'admin-refund-list',
+          component: () => import('@/views/refund/index.vue'),
+          meta: { roles: ['ADMIN'], title: '售后管理' },
+        },
         {
           path: 'merchant/apply',
           name: 'admin-merchant-apply',

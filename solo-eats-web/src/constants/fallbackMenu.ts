@@ -5,9 +5,11 @@ import {
   Money,
   OfficeBuilding,
   PriceTag,
+  RefreshLeft,
   Shop,
   Tickets,
   Wallet,
+  Warning,
 } from '@element-plus/icons-vue'
 import { ROLES } from './roles'
 
@@ -27,6 +29,9 @@ export const FALLBACK_MENU_ITEMS: FallbackMenuItem[] = [
   { path: '/merchant/products', label: '商品与库存', icon: Goods, roles: [ROLES.MERCHANT] },
   { path: '/merchant/settlements', label: '财务结算', icon: Wallet, roles: [ROLES.MERCHANT] },
   { path: '/admin/overview', label: '运营看板', icon: DataLine, roles: [ROLES.ADMIN] },
+  { path: '/order/list', label: '订单列表', icon: Tickets, roles: [ROLES.ADMIN] },
+  { path: '/refund/list', label: '售后管理', icon: RefreshLeft, roles: [ROLES.ADMIN] },
+  { path: '/order/exception', label: '异常订单池', icon: Warning, roles: [ROLES.ADMIN] },
   { path: '/merchant/apply', label: '商家入驻审核', icon: Shop, roles: [ROLES.ADMIN] },
   { path: '/store/shop', label: '门店管理', icon: OfficeBuilding, roles: [ROLES.ADMIN] },
   { path: '/product/spu', label: '商品库', icon: Goods, roles: [ROLES.ADMIN] },
