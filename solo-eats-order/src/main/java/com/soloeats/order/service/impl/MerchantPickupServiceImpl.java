@@ -11,10 +11,12 @@ import com.soloeats.order.mapper.OrderMapper;
 import com.soloeats.order.service.MerchantPickupService;
 import com.soloeats.order.service.OrderApplicationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 @Service
@@ -23,6 +25,10 @@ public class MerchantPickupServiceImpl implements MerchantPickupService {
 
     private final OrderMapper orderMapper;
     private final OrderApplicationService orderApplicationService;
+
+    /** 售后期天数：完成后冻结结算，与配送链路共用同一配置。 */
+    @Value("${app.order.after-sales-days:7}")
+    private long afterSalesDays;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -51,7 +57,7 @@ public class MerchantPickupServiceImpl implements MerchantPickupService {
             throw new BizException(ErrorCode.PARAM_INVALID, "取餐码不正确");
         }
 
-        return orderApplicationService.transit(
+        orderApplicationService.transit(
                 orderId,
                 OrderEvent.PICKUP_VERIFY,
                 FulfillmentType.PICKUP,
@@ -59,5 +65,21 @@ public class MerchantPickupServiceImpl implements MerchantPickupService {
                 merchantId,
                 "PICKUP_VERIFY:" + orderId
         );
+
+        // 自取订单没有配送/送达等后续履约环节，核销即视为履约完成。
+        // 此前只推到 PICKED_UP(51) 就结束了，全代码库无人调用 PICKUP_COMPLETE，
+        // 导致订单永久停在「已取餐」、settle_eligible_at 始终为空、永远进不了结算。
+        orderApplicationService.transit(
+                orderId,
+                OrderEvent.PICKUP_COMPLETE,
+                FulfillmentType.PICKUP,
+                OperatorType.SYSTEM,
+                null,
+                "PICKUP_COMPLETE:" + orderId
+        );
+        orderMapper.markCompleted(orderId, LocalDateTime.now().plusDays(afterSalesDays));
+
+        // 返回终态：核销后订单已到 COMPLETED，若返回 PICKED_UP 会让前端显示过时的中间状态
+        return OrderStatus.COMPLETED;
     }
 }

@@ -18,8 +18,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 支付成功 / 支付超时的订单侧编排。
@@ -67,7 +69,16 @@ public class OrderPaymentApplicationService {
                     order.getReceiverLat(),
                     order.getDeliveryFee()
             );
+        } else {
+            // 自取订单：支付成功即生成取餐码。此前该方法只处理了配送分支，
+            // pickup_code 从未被赋值，导致核销接口永远比对不上、自取订单无法完成。
+            orderMapper.assignPickupCode(orderId, generatePickupCode(), LocalDate.now());
         }
+    }
+
+    /** 4 位数字取餐码，范围 1000~9999，避开以 0 开头的易读歧义。 */
+    private String generatePickupCode() {
+        return String.valueOf(ThreadLocalRandom.current().nextInt(1000, 10000));
     }
 
     @Transactional(rollbackFor = Exception.class)

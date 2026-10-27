@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -56,6 +57,22 @@ public interface OrderMapper extends BaseMapper<Order> {
               AND status = 10
             """)
     int markPaid(@Param("orderId") Long orderId);
+
+    /**
+     * 自取订单生成取餐码。核销时按 orderId 查订单再比对码，
+     * 因此取餐码不要求全局唯一，同日同店重复也不影响核销正确性。
+     */
+    @Update("""
+            UPDATE t_order
+            SET pickup_code = #{pickupCode},
+                pickup_code_date = #{pickupDate},
+                pickup_code_status = 0,
+                updated_at = NOW(3)
+            WHERE id = #{orderId}
+            """)
+    int assignPickupCode(@Param("orderId") Long orderId,
+                         @Param("pickupCode") String pickupCode,
+                         @Param("pickupDate") LocalDate pickupDate);
 
     @Update("""
             UPDATE t_order

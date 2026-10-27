@@ -18,6 +18,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -97,8 +99,8 @@ class MerchantPickupVerifyTest {
     }
 
     @Test
-    @DisplayName("核销：31 核销成功，经状态机流转到 51")
-    void verifySucceedsAndTransitsToPickedUp() {
+    @DisplayName("核销：31 核销成功，随即自动完成到 60 并写入结算冻结时间")
+    void verifySucceedsAndCompletesOrder() {
         when(orderMapper.selectById(ORDER_ID)).thenReturn(order(2, OrderStatus.WAIT_USER_PICKUP.getCode()));
         when(orderApplicationService.transit(
                 ORDER_ID,
@@ -108,11 +110,20 @@ class MerchantPickupVerifyTest {
                 MERCHANT_ID,
                 "PICKUP_VERIFY:" + ORDER_ID
         )).thenReturn(OrderStatus.PICKED_UP);
+        when(orderApplicationService.transit(
+                ORDER_ID,
+                OrderEvent.PICKUP_COMPLETE,
+                FulfillmentType.PICKUP,
+                OperatorType.SYSTEM,
+                null,
+                "PICKUP_COMPLETE:" + ORDER_ID
+        )).thenReturn(OrderStatus.COMPLETED);
 
         OrderStatus result = merchantPickupService.verifyPickup(ORDER_ID, MERCHANT_ID, " " + PICKUP_CODE + " ");
 
-        assertThat(result).isEqualTo(OrderStatus.PICKED_UP);
-        assertThat(result.getCode()).isEqualTo(51);
+        // 自取单核销即履约完成，返回终态而非中间态 51
+        assertThat(result).isEqualTo(OrderStatus.COMPLETED);
+        assertThat(result.getCode()).isEqualTo(60);
         verify(orderApplicationService).transit(
                 ORDER_ID,
                 OrderEvent.PICKUP_VERIFY,
@@ -121,6 +132,16 @@ class MerchantPickupVerifyTest {
                 MERCHANT_ID,
                 "PICKUP_VERIFY:" + ORDER_ID
         );
+        verify(orderApplicationService).transit(
+                ORDER_ID,
+                OrderEvent.PICKUP_COMPLETE,
+                FulfillmentType.PICKUP,
+                OperatorType.SYSTEM,
+                null,
+                "PICKUP_COMPLETE:" + ORDER_ID
+        );
+        // 完成后必须写 settle_eligible_at，否则订单永远进不了结算
+        verify(orderMapper).markCompleted(eq(ORDER_ID), any());
     }
 
     private Order order(int fulfillmentType, int status) {
