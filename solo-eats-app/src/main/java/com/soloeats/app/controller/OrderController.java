@@ -20,6 +20,9 @@ import com.soloeats.common.ratelimit.RateLimitDimension;
 import com.soloeats.order.domain.enums.OperatorType;
 import com.soloeats.order.domain.enums.OrderEvent;
 import com.soloeats.order.domain.enums.OrderStatus;
+import com.soloeats.order.domain.enums.RefundStatus;
+import com.soloeats.order.service.result.RefundResult;
+import com.soloeats.settlement.service.FundFlowService;
 import com.soloeats.order.service.DeliveryFulfillmentApplicationService;
 import com.soloeats.order.service.OrderApplicationService;
 import com.soloeats.order.service.OrderQueryService;
@@ -30,6 +33,7 @@ import com.soloeats.order.service.view.UserOrderDetailView;
 import com.soloeats.order.service.view.UserOrderView;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,6 +43,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Objects;
+
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
@@ -49,6 +56,7 @@ public class OrderController {
     private final RefundService refundService;
     private final PermissionGuard permissionGuard;
     private final OrderQueryService orderQueryService;
+    private final FundFlowService fundFlowService;
 
     /**
      * 用户端订单列表。前端 solo-eats-uniapp-user 的 api/order.ts 一直调 GET /v1/orders，
@@ -201,9 +209,32 @@ public class OrderController {
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody RefundRequest request) {
         permissionGuard.assertUserOrder(orderId);
-        return ApiResponse.ok(RefundVO.from(
-                refundService.refund(orderId, request.reason(), idempotencyKey)
-        ));
+        RefundResult result = refundService.refund(orderId, request.reason(), idempotencyKey);
+        recordRefundOffset(result);
+        return ApiResponse.ok(RefundVO.from(result));
+    }
+
+    /**
+     * 退款成功写资金流水（flow_type=6 退款冲抵）。
+     *
+     * <p>跨模块：settlement 依赖 order，故流水只能在 app 编排层补，不能在 order 模块内写。
+     * 与退款**不同事务**，失败只记日志不阻断退款——退款已真实发生，回滚流水没有意义；
+     * 靠 {@code uk_biz(flow_type, biz_type, biz_id)} 幂等，后续可安全补偿重试。
+     */
+    private void recordRefundOffset(RefundResult result) {
+        if (result == null || !Objects.equals(result.refundStatus(), RefundStatus.SUCCESS.getCode())) {
+            return;
+        }
+        try {
+            fundFlowService.recordRefundOffset(
+                    result.refundId(), result.refundNo(), nz(result.amount()));
+        } catch (RuntimeException ex) {
+            log.error("refund offset fund flow failed refundId={}", result.refundId(), ex);
+        }
+    }
+
+    private static long nz(Long value) {
+        return value == null ? 0L : value;
     }
 
     @RequireRole(Roles.MERCHANT)

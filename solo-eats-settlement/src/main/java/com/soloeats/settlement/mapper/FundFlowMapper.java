@@ -42,7 +42,9 @@ public interface FundFlowMapper extends BaseMapper<FundFlow> {
               COALESCE(SUM(CASE WHEN flow_type = 3 THEN amount ELSE 0 END), 0) AS subsidy_cost,
               COALESCE(SUM(CASE WHEN flow_type = 4 THEN amount ELSE 0 END), 0) AS discount_cost,
               COALESCE(SUM(CASE WHEN flow_type = 5 THEN amount ELSE 0 END), 0) AS payout_expense,
-              COALESCE(SUM(CASE WHEN flow_type = 6 THEN amount ELSE 0 END), 0) AS refund_offset
+              COALESCE(SUM(CASE WHEN flow_type = 6
+                                THEN (CASE WHEN direction = 2 THEN -amount ELSE amount END)
+                                ELSE 0 END), 0) AS refund_offset
             FROM t_fund_flow
             WHERE created_at >= #{dateFrom}
               AND created_at < #{dateTo}

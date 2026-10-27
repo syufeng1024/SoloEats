@@ -100,6 +100,18 @@ public class FundFlowServiceImpl implements FundFlowService {
     }
 
     @Override
+    public void recordRefundOffset(Long refundId, String refundNo, long refundAmount) {
+        if (refundId == null || refundId <= 0L) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "退款单 ID 不合法");
+        }
+        // direction 固定 2(出)：退款是平台资金流出，报表侧再按方向取负还原成「负项冲抵」
+        record(FlowType.REFUND_OFFSET.getCode(), BIZ_TYPE_REFUND_ORDER, refundId,
+                FlowType.DIRECTION_OUT,
+                refundAmount,
+                "退款单 " + refundNo + " 冲抵");
+    }
+
+    @Override
     public void recordPayoutExpense(PayoutOrder order) {
         if (order == null || order.getId() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "提现单不能为空");

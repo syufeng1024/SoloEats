@@ -19,6 +19,7 @@ public interface FundFlowService {
     String BIZ_TYPE_COMMISSION_RECORD = "commission_record";
     String BIZ_TYPE_PAYOUT_ORDER = "payout_order";
     String BIZ_TYPE_SETTLEMENT_BILL = "settlement_bill";
+    String BIZ_TYPE_REFUND_ORDER = "refund_order";
 
     /**
      * 记一条流水。flowType / direction 取值见 {@code FlowType}；
@@ -36,6 +37,19 @@ public interface FundFlowService {
      * 提现到账：提现支出（flow_type = 5），业务单据为提现单。
      */
     void recordPayoutExpense(PayoutOrder order);
+
+    /**
+     * 退款冲抵：退款成功（flow_type = 6），业务单据为退款单。
+     *
+     * <p>按 T16 卡「已结算订单发生退款计入下一期负项冲抵」，该笔在报表侧是负项。
+     * 因 {@link #record} 校验金额必须为正，此处以 {@code direction=2(出)} + 正金额落库，
+     * 由 {@code FundFlowMapper#sumByFlowType} 对 flow_type=6 按方向取符号还原为负值。
+     *
+     * @param refundId 退款单 ID（幂等键的一部分，重复调用静默跳过）
+     * @param refundNo 退款单号，仅用于备注可读性
+     * @param refundAmount 退款金额（分，正数）
+     */
+    void recordRefundOffset(Long refundId, String refundNo, long refundAmount);
 
     /**
      * 平台资金流水分页，可按流水类型与日期（左闭右开）筛选。
