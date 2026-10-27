@@ -534,6 +534,10 @@ function goAbout(): void {
 }
 
 .mine__grid-icon {
+  /* uni-text 默认 inline，在 .mine__grid-icon-wrap（block）内 width/height 会失效，
+     导致「券」色块比兄弟图标小、且 wrap 被 line-height 撑高，badge 会跑到色块上方。
+     显式 block 化后色块回到 76×76，与其他格子一致，badge 也才能贴住色块右上角。 */
+  display: block;
   width: 76rpx;
   height: 76rpx;
   line-height: 76rpx;
@@ -547,8 +551,9 @@ function goAbout(): void {
 
 .mine__grid-badge {
   position: absolute;
-  top: -10rpx;
-  right: -34rpx;
+  top: 0;
+  right: 0;
+  transform: translate(35%, -45%);
   padding: 0 8rpx;
   border-radius: 8rpx;
   background-color: #ff4d4f;

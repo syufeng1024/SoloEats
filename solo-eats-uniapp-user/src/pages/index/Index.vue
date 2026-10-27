@@ -88,7 +88,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
+import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import { fetchNearbyShops } from '@/api/shop'
 import type { ShopVO } from '@/api/types'
 import { fenToYuan } from '@/utils/money'
@@ -105,6 +105,10 @@ const auth = useAuthStore()
 // 本期单城市，定位失败或未授权时按北京中心坐标兜底，不阻断浏览
 const BEIJING: StoredLocation = { lng: 116.397428, lat: 39.90923, city: '北京' }
 const location = reactive<StoredLocation>({ ...BEIJING })
+
+/** 定位兜底超时：H5 未授权场景下 getLocation 可能长时间无回调 */
+const LOCATE_TIMEOUT_MS = 5000
+let locateTimer: ReturnType<typeof setTimeout> | null = null
 
 const shops = ref<ShopVO[]>([])
 const total = ref(0)
@@ -138,14 +142,59 @@ function persistLocation(): void {
   uni.setStorageSync('location', { lng: location.lng, lat: location.lat, city: location.city })
 }
 
+/** 定位兜底：回落到北京中心坐标并落盘，保证下次进入直接出列表 */
+function applyFallbackLocation(): void {
+  location.lng = BEIJING.lng
+  location.lat = BEIJING.lat
+  location.city = BEIJING.city
+  persistLocation()
+}
+
+function clearLocateTimer(): void {
+  if (locateTimer !== null) {
+    clearTimeout(locateTimer)
+    locateTimer = null
+  }
+}
+
+// H5 未授权定位时 uni.getLocation 可能既不 success 也不 fail，必须自带超时兜底
+onUnload(() => {
+  clearLocateTimer()
+})
+
 function locate(): void {
   if (locating.value) {
     return
   }
   locating.value = true
+  locFailed.value = false
+  clearLocateTimer()
+
+  // 一次性守卫：超时兜底与真实回调只允许一方生效，避免重复请求门店列表
+  let settled = false
+
+  locateTimer = setTimeout(() => {
+    locateTimer = null
+    if (settled) {
+      return
+    }
+    settled = true
+    // 超时分支拿不到 complete 回调，这里手动复位定位态，避免页面永久卡「定位中…」
+    locating.value = false
+    locFailed.value = true
+    uni.showToast({ title: '定位超时，已按北京展示', icon: 'none' })
+    applyFallbackLocation()
+    loadShops(true)
+  }, LOCATE_TIMEOUT_MS)
+
   uni.getLocation({
     type: 'gcj02',
     success: (res) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearLocateTimer()
       location.lng = res.longitude
       location.lat = res.latitude
       // 单城市本期写死北京，多城市由后续版本的城市选择页替换
@@ -155,11 +204,14 @@ function locate(): void {
       loadShops(true)
     },
     fail: () => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearLocateTimer()
       locFailed.value = true
       uni.showToast({ title: '定位失败，已按北京展示', icon: 'none' })
-      location.lng = BEIJING.lng
-      location.lat = BEIJING.lat
-      location.city = BEIJING.city
+      applyFallbackLocation()
       loadShops(true)
     },
     complete: () => {
