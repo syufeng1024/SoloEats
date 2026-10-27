@@ -134,6 +134,21 @@
 
 `views/admin/order/{OrderListView,OrderDetailView,AfterSaleView,ExceptionPoolView}.vue`、`views/admin/delivery/{RiderListView,RiderAuditView,DispatchCenterView,DeliveryListView,FreightTemplateView}.vue`、`api/delivery.ts`；商家中心侧：`solo-eats-web-merchant/src/views/order/{PickupVerifyView,ReceiptView}.vue`
 
+### 批次 4 必选前置任务：菜单 component 与前端静态路由映射机制
+
+**缺口现状**：后端 `t_sys_menu.component` 存的是前端组件路径，且已种入 4 个尚无对应页面的菜单——`finance/payout/index`（V19 迁移，菜单 id 110，`/finance/payout`）、`finance/commissionRule/index`（V27，id 142）、`finance/commissionRecord/index`（V27，id 144）、`finance/fundFlow/index`（V27，id 145）。而 `solo-eats-web/src/router/index.ts` 是逐条静态声明 `component: () => import('@/views/xxx.vue')`，**没有**用 `import.meta.glob` 解析后端下发的 `component` 字段；`solo-eats-web/src/views/` 下也不存在 `finance/` 目录（实测只有 `admin/`、`merchant/`、`LoginView.vue`、`NotFoundView.vue`）。
+
+**后果**：这 4 个菜单点进去无匹配路由，落到 `NotFoundView`（白屏）。属既有架构缺口，非本轮引入。
+
+**候选方案**：
+
+| 方案 | 做法 | 改动面 | 风险 |
+|---|---|---|---|
+| A | 前端建 `import.meta.glob('/src/views/**/*.vue')` 映射表，按后端 `component` 字符串动态解析组件 | `router/index.ts` 路由装配 1 处；后端 `component` 必须与 `views/` 相对路径严格一致（大小写敏感，V27 种的是 `finance/commissionRule/index` 驼峰目录） | 解析不到时须回退 `NotFoundView` 并打 warning，否则菜单静默消失；glob 用 `{ eager: false }` 保持路由懒加载，避免首屏 chunk 膨胀；构建期缺文件只能在运行时报错，需补一条「菜单 component 全量可解析」的单测 |
+| B | 保留静态路由，`t_sys_menu.component` 降级为纯展示字段，另建「菜单 → 路由名」映射清单（前端常量表） | 新增 1 个映射常量文件 + 后续每加菜单都要改它并重新发版 | 清单与 `router/index.ts` 两处维护，漏改一处同样白屏；后端新配菜单无法随配置生效，必须前端发版 |
+
+**强制要求**：批次 4 任何页面开发开始前，必须先选定 A 或 B，并把上述 4 个历史菜单回填到所选机制中、实测点击可达。否则批次 4 新做的资金页面依旧点不开。
+
 ### 批次 4：资金 · 报表 · 客服 · 内容 · 营销（18 个）
 
 `views/admin/finance/{CommissionRuleView,PayoutAuditView,FundFlowView}.vue`、`views/admin/report/{DashboardView,FunnelView,ProductRankView,FinanceReportView}.vue`、`views/admin/service/{TicketListView,TicketDetailView,FaqView}.vue`、`views/admin/content/{HomeDesignView,BannerView,AppVersionView}.vue`、`views/admin/marketing/{PromotionView,MemberLevelView}.vue`、`api/{settlement,report,service,content,marketing}.ts`（扩展）

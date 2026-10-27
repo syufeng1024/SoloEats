@@ -47,4 +47,20 @@ public interface PayoutOrderMapper extends BaseMapper<PayoutOrder> {
             """)
     Long sumActivePayoutAmount(@Param("subjectType") Integer subjectType,
                                @Param("subjectId") Long subjectId);
+
+    /**
+     * 商家是否存在生效中的结算收款账户：status = 1（0待审 1生效 2停用）、未删除，
+     * 且当前日期落在 [effective_from, effective_to] 内（NULL 视为不限）。
+     * 只读表，不引 merchant 模块依赖。
+     */
+    @Select("""
+            SELECT COUNT(*)
+            FROM t_merchant_settlement_account
+            WHERE merchant_id = #{merchantId}
+              AND status = 1
+              AND deleted = 0
+              AND (effective_from IS NULL OR effective_from <= CURDATE())
+              AND (effective_to IS NULL OR effective_to >= CURDATE())
+            """)
+    int countActiveSettlementAccount(@Param("merchantId") Long merchantId);
 }

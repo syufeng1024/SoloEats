@@ -68,8 +68,11 @@ public enum ErrorCode {
 
     SETTLEMENT_NOT_FOUND(60001, "结算单不存在", HttpStatus.NOT_FOUND),
     SETTLEMENT_STATE_INVALID(60002, "结算状态不一致", HttpStatus.CONFLICT),
+    COMMISSION_RULE_NOT_FOUND(60003, "抽佣规则不存在", HttpStatus.NOT_FOUND),
     PAYOUT_AMOUNT_EXCEEDED(60004, "可提现余额不足", HttpStatus.CONFLICT),
     PAYOUT_STATE_INVALID(60005, "提现单状态不允许当前操作", HttpStatus.CONFLICT),
+    PAYOUT_ACCOUNT_REQUIRED(60006, "未配置生效的结算收款账户", HttpStatus.BAD_REQUEST),
+    SETTLE_AMOUNT_MISMATCH(60007, "结算金额不一致，账单不可复算", HttpStatus.CONFLICT),
 
     MERCHANT_NOT_FOUND(70001, "商家不存在", HttpStatus.NOT_FOUND),
     MERCHANT_STATUS_INVALID(70002, "商家状态不允许当前操作", HttpStatus.CONFLICT),

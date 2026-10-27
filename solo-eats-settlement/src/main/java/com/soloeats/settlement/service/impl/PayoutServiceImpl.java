@@ -7,9 +7,11 @@ import com.soloeats.common.api.PageResult;
 import com.soloeats.common.exception.BizException;
 import com.soloeats.common.exception.ErrorCode;
 import com.soloeats.common.idempotency.Idempotent;
+import com.soloeats.common.lock.DistributedLock;
 import com.soloeats.settlement.domain.entity.PayoutOrder;
 import com.soloeats.settlement.domain.enums.PayoutStatus;
 import com.soloeats.settlement.mapper.PayoutOrderMapper;
+import com.soloeats.settlement.service.FundFlowService;
 import com.soloeats.settlement.service.PayoutService;
 import com.soloeats.settlement.service.view.PayoutView;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Supplier;
 
 @Slf4j
 @Service
@@ -30,15 +33,29 @@ public class PayoutServiceImpl implements PayoutService {
     /** 单笔上限 100 万元（分）。 */
     static final long MAX_PAYOUT_AMOUNT = 100_000_000L;
 
+    /** 账户级锁等待秒数：拿不到锁直接快速失败，避免请求堆积。 */
+    static final long LOCK_WAIT_SECONDS = 3L;
+    /** 账户级锁持有时长：覆盖「查余额 → 校验 → 落单」三步，异常退出自动释放。 */
+    static final long LOCK_LEASE_SECONDS = 10L;
+
     private static final int DEFAULT_CHANNEL = 1;
     private static final int MAX_NO_RETRY = 3;
     private static final DateTimeFormatter NO_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
     private final PayoutOrderMapper payoutOrderMapper;
 
+    /** 主体级分布式锁，key = payout:apply:{subjectType}:{subjectId}。 */
+    private final DistributedLock distributedLock;
+
+    /** 资金流水：到账后记提现支出。 */
+    private final FundFlowService fundFlowService;
+
     /**
      * 防重窗口 5 秒，key 由方法签名 + 入参哈希生成（含 subjectType/subjectId/amount）。
      * 不用固定 key，否则任一主体发起后 5 秒内其他主体的申请都会被误判为重复提交。
+     *
+     * <p>并发超提防护：「查余额 → 校验 → 落单」三步在主体级分布式锁内完成，
+     * key 为 {@code payout:apply:{subjectType}:{subjectId}}；数据库条件更新仍是最终防线。
      */
     @Override
     @Idempotent(ttlSeconds = 5)
@@ -55,6 +72,16 @@ public class PayoutServiceImpl implements PayoutService {
             throw new BizException(ErrorCode.PARAM_INVALID, "channel 只能是 1支付宝 或 2银行卡");
         }
 
+        String lockKey = "payout:apply:" + subjectType + ":" + subjectId;
+        return withSubjectLock(lockKey, () -> doApply(subjectType, subjectId, amount, resolvedChannel));
+    }
+
+    /**
+     * 账户校验 + 余额校验 + 落单必须在同一把锁内，否则两个并发请求会读到同一份可用余额
+     * 而双双通过校验，造成超额提现。
+     */
+    private PayoutView doApply(Integer subjectType, Long subjectId, Long amount, int channel) {
+        requireSettlementAccount(subjectType, subjectId);
         long available = availableBalance(subjectType, subjectId);
         if (amount > available) {
             throw new BizException(ErrorCode.PAYOUT_AMOUNT_EXCEEDED,
@@ -65,7 +92,7 @@ public class PayoutServiceImpl implements PayoutService {
         order.setSubjectType(subjectType);
         order.setSubjectId(subjectId);
         order.setAmount(amount);
-        order.setChannel(resolvedChannel);
+        order.setChannel(channel);
         order.setStatus(PayoutStatus.PENDING.getCode());
 
         for (int attempt = 1; attempt <= MAX_NO_RETRY; attempt++) {
@@ -83,6 +110,27 @@ public class PayoutServiceImpl implements PayoutService {
             }
         }
         throw new BizException(ErrorCode.SYSTEM_ERROR, "提现单号生成失败，请重试");
+    }
+
+    /**
+     * 商家提现必须有生效中的结算收款账户，否则无处打款；骑手侧无账户表，不校验。
+     * 放在锁内，与余额校验同一次串行执行。
+     */
+    private void requireSettlementAccount(Integer subjectType, Long subjectId) {
+        if (subjectType != SUBJECT_TYPE_MERCHANT) {
+            return;
+        }
+        if (payoutOrderMapper.countActiveSettlementAccount(subjectId) <= 0) {
+            throw new BizException(ErrorCode.PAYOUT_ACCOUNT_REQUIRED,
+                    "请先配置生效中的结算收款账户后再申请提现");
+        }
+    }
+
+    /**
+     * 主体级分布式锁；锁组件为必需依赖，永不判空。
+     */
+    private <T> T withSubjectLock(String key, Supplier<T> action) {
+        return distributedLock.executeWithLock(key, LOCK_WAIT_SECONDS, LOCK_LEASE_SECONDS, action);
     }
 
     @Override
@@ -163,6 +211,20 @@ public class PayoutServiceImpl implements PayoutService {
     public void arrive(Long id) {
         transit(id, PayoutStatus.PAYING, PayoutStatus.ARRIVED, false,
                 "仅打款中的提现单可登记到账");
+        recordPayoutExpense(id);
+    }
+
+    /**
+     * 到账后记一条提现支出流水（flow_type = 5）。uk_biz 保证重复到账不会重复记账。
+     */
+    private void recordPayoutExpense(Long id) {
+        PayoutOrder order = payoutOrderMapper.selectById(id);
+        if (order == null) {
+            // 数据一致性兜底：条件更新成功即代表单据存在，查不到只可能是脏数据，只记告警
+            log.warn("payout order missing after arrive payoutId={}", id);
+            return;
+        }
+        fundFlowService.recordPayoutExpense(order);
     }
 
     @Override

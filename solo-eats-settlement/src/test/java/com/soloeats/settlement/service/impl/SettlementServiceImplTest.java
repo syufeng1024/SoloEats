@@ -7,8 +7,12 @@ import com.soloeats.common.exception.ErrorCode;
 import com.soloeats.order.domain.entity.Order;
 import com.soloeats.order.domain.enums.OrderStatus;
 import com.soloeats.order.mapper.OrderMapper;
+import com.soloeats.settlement.domain.entity.CommissionRecord;
 import com.soloeats.settlement.domain.entity.SettlementBill;
 import com.soloeats.settlement.domain.entity.SettlementItem;
+import com.soloeats.settlement.mapper.CommissionRecordMapper;
+import com.soloeats.settlement.mapper.CommissionRuleMapper;
+import com.soloeats.settlement.mapper.FundFlowMapper;
 import com.soloeats.settlement.mapper.SettlementBillMapper;
 import com.soloeats.settlement.mapper.SettlementItemMapper;
 import com.soloeats.settlement.service.view.SettlementGenerateResult;
@@ -57,6 +61,12 @@ class SettlementServiceImplTest {
     private OrderMapper orderMapper;
     @Mock
     private TransactionTemplate transactionTemplate;
+    @Mock
+    private CommissionRuleMapper commissionRuleMapper;
+    @Mock
+    private CommissionRecordMapper commissionRecordMapper;
+    @Mock
+    private FundFlowMapper fundFlowMapper;
 
     @InjectMocks
     private SettlementServiceImpl settlementService;
@@ -71,14 +81,30 @@ class SettlementServiceImplTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
-        ReflectionTestUtils.setField(settlementService, "commissionRate", new BigDecimal("0.0600"));
+        // 注入「真实」规则引擎，而不是 mock 掉整个 CommissionService：
+        // 规则 Mapper 全部返回 null → 引擎回落 app.settlement.default-commission-rate(0.0600)，
+        // 走完 resolve → calcCommission → 落 t_commission_record → 记佣金收入流水 的完整链路。
+        FundFlowServiceImpl fundFlowService = new FundFlowServiceImpl(fundFlowMapper);
+        CommissionServiceImpl commissionService = new CommissionServiceImpl(
+                commissionRuleMapper, commissionRecordMapper, fundFlowService);
+        ReflectionTestUtils.setField(
+                commissionService, "defaultCommissionRate", new BigDecimal("0.0600"));
+        ReflectionTestUtils.setField(settlementService, "commissionService", commissionService);
+        ReflectionTestUtils.setField(settlementService, "fundFlowService", fundFlowService);
+
+        // 纯单测没有数据库自增主键，抽佣明细插入后回填 id，供资金流水 biz_id 使用
+        lenient().when(commissionRecordMapper.insert(any(CommissionRecord.class)))
+                .thenAnswer(invocation -> {
+                    ((CommissionRecord) invocation.getArgument(0)).setId(7001L);
+                    return 1;
+                });
         lenient().when(transactionTemplate.execute(any()))
                 .thenAnswer(invocation -> ((TransactionCallback<Object>) invocation.getArgument(0))
                         .doInTransaction(mock(TransactionStatus.class)));
     }
 
     @Test
-    @DisplayName("按商家归集结算单：抽成基数为 goods+packaging-merchantDiscount，按 HALF_UP 取整")
+    @DisplayName("按商家归集结算单：抽成基数为 goods−merchantDiscount（不含打包费），按 HALF_UP 取整")
     void generateBillComputesCommissionAndPayable() {
         when(orderMapper.selectList(any())).thenReturn(List.of(
                 order(1L, 10000L, 200L, 500L, 300L),
@@ -105,11 +131,11 @@ class SettlementServiceImplTest {
         assertThat(bill.getGrossAmount()).isEqualTo(15200L);
         assertThat(bill.getMerchantDiscount()).isEqualTo(500L);
         assertThat(bill.getPlatformDiscount()).isEqualTo(300L);
-        assertThat(bill.getCommissionBase()).isEqualTo(14700L);
-        // 9700*6% = 582, 5000*6% = 300
-        assertThat(bill.getCommissionAmount()).isEqualTo(882L);
-        // (10200-500+300-582) + (5000-0+0-300) = 9418 + 4700
-        assertThat(bill.getPayableAmount()).isEqualTo(14118L);
+        assertThat(bill.getCommissionBase()).isEqualTo(14500L);
+        // 9500*6% = 570, 5000*6% = 300
+        assertThat(bill.getCommissionAmount()).isEqualTo(870L);
+        // (10200-500+300-570) + (5000-0+0-300) = 9430 + 4700
+        assertThat(bill.getPayableAmount()).isEqualTo(14130L);
 
         ArgumentCaptor<SettlementItem> itemCaptor = ArgumentCaptor.forClass(SettlementItem.class);
         verify(settlementItemMapper, org.mockito.Mockito.times(4)).insert(itemCaptor.capture());
@@ -117,7 +143,7 @@ class SettlementServiceImplTest {
                 .filter(item -> item.getItemType() == 2)
                 .mapToLong(SettlementItem::getAmount)
                 .sum();
-        assertThat(commissionItems).isEqualTo(-882L);
+        assertThat(commissionItems).isEqualTo(-870L);
     }
 
     @Test

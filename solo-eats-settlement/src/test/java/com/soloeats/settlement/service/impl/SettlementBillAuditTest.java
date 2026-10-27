@@ -6,11 +6,16 @@ import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.soloeats.common.exception.BizException;
 import com.soloeats.common.exception.ErrorCode;
 import com.soloeats.order.mapper.OrderMapper;
+import com.soloeats.settlement.domain.entity.FundFlow;
 import com.soloeats.settlement.domain.entity.SettlementBill;
+import com.soloeats.settlement.domain.enums.FlowType;
+import com.soloeats.settlement.mapper.FundFlowMapper;
 import com.soloeats.settlement.mapper.SettlementBillMapper;
 import com.soloeats.settlement.mapper.SettlementItemMapper;
+import com.soloeats.settlement.service.FundFlowService;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +23,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,6 +50,8 @@ class SettlementBillAuditTest {
     private OrderMapper orderMapper;
     @Mock
     private TransactionTemplate transactionTemplate;
+    @Mock
+    private FundFlowMapper fundFlowMapper;
 
     @InjectMocks
     private SettlementServiceImpl settlementService;
@@ -52,6 +60,13 @@ class SettlementBillAuditTest {
     static void initMybatisPlusMetadata() {
         TableInfoHelper.initTableInfo(
                 new MapperBuilderAssistant(new MybatisConfiguration(), ""), SettlementBill.class);
+    }
+
+    @BeforeEach
+    void setUp() {
+        // 注入真实资金流水实现，验证打款后确实写 t_fund_flow（不是 mock 掉整条链路）
+        ReflectionTestUtils.setField(settlementService, "fundFlowService",
+                new FundFlowServiceImpl(fundFlowMapper));
     }
 
     @Test
@@ -98,6 +113,30 @@ class SettlementBillAuditTest {
         assertThatThrownBy(() -> settlementService.payBill(BILL_ID, AUDITOR_ID))
                 .isInstanceOfSatisfying(BizException.class, ex ->
                         assertThat(ex.getCode()).isEqualTo(ErrorCode.PAYOUT_STATE_INVALID.getCode()));
+    }
+
+    @Test
+    @DisplayName("打款成功：写一条结算支出流水 flow_type=2 direction=2，金额取账单 payable_amount")
+    void payWritesSettlementExpenseFundFlow() {
+        when(settlementBillMapper.update(isNull(), any())).thenReturn(1);
+        SettlementBill bill = new SettlementBill();
+        bill.setId(BILL_ID);
+        bill.setBillNo("SB20261027000001");
+        bill.setMerchantId(10L);
+        bill.setPayableAmount(14_118L);
+        bill.setStatus(30);
+        when(settlementBillMapper.selectById(BILL_ID)).thenReturn(bill);
+
+        settlementService.payBill(BILL_ID, AUDITOR_ID);
+
+        ArgumentCaptor<FundFlow> captor = ArgumentCaptor.forClass(FundFlow.class);
+        verify(fundFlowMapper).insert(captor.capture());
+        FundFlow flow = captor.getValue();
+        assertThat(flow.getFlowType()).isEqualTo(FlowType.SETTLEMENT_EXPENSE.getCode());
+        assertThat(flow.getDirection()).isEqualTo(FlowType.DIRECTION_OUT);
+        assertThat(flow.getAmount()).isEqualTo(14_118L);
+        assertThat(flow.getBizType()).isEqualTo(FundFlowService.BIZ_TYPE_SETTLEMENT_BILL);
+        assertThat(flow.getBizId()).isEqualTo(BILL_ID);
     }
 
     private LambdaUpdateWrapper<SettlementBill> captureUpdate() {

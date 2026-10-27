@@ -11,11 +11,15 @@ import com.soloeats.order.domain.enums.OrderStatus;
 import com.soloeats.order.mapper.OrderMapper;
 import com.soloeats.settlement.domain.entity.SettlementBill;
 import com.soloeats.settlement.domain.entity.SettlementItem;
+import com.soloeats.settlement.domain.enums.FlowType;
 import com.soloeats.settlement.mapper.SettlementBillMapper;
 import com.soloeats.settlement.mapper.SettlementItemMapper;
+import com.soloeats.settlement.service.CommissionService;
+import com.soloeats.settlement.service.FundFlowService;
 import com.soloeats.settlement.service.SettlementService;
 import com.soloeats.settlement.service.view.AdminSettlementStatsResult;
 import com.soloeats.settlement.service.view.AdminSettlementSummary;
+import com.soloeats.settlement.service.view.CommissionResolveResult;
 import com.soloeats.settlement.service.view.SettlementBillView;
 import com.soloeats.settlement.service.view.SettlementDetailResult;
 import com.soloeats.settlement.service.view.SettlementGenerateResult;
@@ -25,14 +29,11 @@ import com.soloeats.settlement.service.view.SettlementOrderView;
 import com.soloeats.settlement.service.view.SettlementSummary;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -55,8 +56,11 @@ public class SettlementServiceImpl implements SettlementService {
     private final OrderMapper orderMapper;
     private final TransactionTemplate transactionTemplate;
 
-    @Value("${app.settlement.default-commission-rate:0.0600}")
-    private BigDecimal commissionRate;
+    /** 三级抽佣规则引擎：费率来源的唯一入口，未命中时由引擎回落默认费率。 */
+    private final CommissionService commissionService;
+
+    /** 平台资金流水：结算单打款成功后记结算支出。 */
+    private final FundFlowService fundFlowService;
 
     @Override
     public SettlementGenerateResult generateDailyBills() {
@@ -297,6 +301,7 @@ public class SettlementServiceImpl implements SettlementService {
             throw new BizException(ErrorCode.PAYOUT_STATE_INVALID, "仅审核通过的结算单可打款");
         }
         log.info("settlement bill paid billId={} operatorId={}", billId, operatorId);
+        recordSettlementExpense(billId);
     }
 
     private void applyAdminFilters(QueryWrapper<SettlementBill> wrapper, Long merchantId,
@@ -332,16 +337,17 @@ public class SettlementServiceImpl implements SettlementService {
         long commissionAmount = 0L;
         long payableAmount = 0L;
         List<OrderAmount> amounts = new ArrayList<>();
+        List<Long> orderIds = orders.stream().map(Order::getId).toList();
 
         for (Order order : orders) {
             long gross = nz(order.getGoodsAmount()) + nz(order.getPackagingFee());
             long merchantDiscountOfOrder = nz(order.getMerchantDiscount());
             long platformDiscountOfOrder = nz(order.getPlatformDiscount());
-            long base = gross - merchantDiscountOfOrder;
-            long commission = BigDecimal.valueOf(base)
-                    .multiply(commissionRate)
-                    .setScale(0, RoundingMode.HALF_UP)
-                    .longValue();
+            // 抽佣基数：商品金额 − 商家承担优惠（不含打包费）；打包费仍全额计入结算营业额，不参与抽佣
+            long base = nz(order.getGoodsAmount()) - merchantDiscountOfOrder;
+            // 费率来源改为三级规则引擎（活动 > 商家 > 品类 > 全局），无命中时引擎内部回落默认费率
+            CommissionResolveResult commissionResult = resolveCommission(order, base);
+            long commission = commissionResult.commissionAmount();
             long merchantAmount = gross - merchantDiscountOfOrder
                     + platformDiscountOfOrder - commission;
 
@@ -395,7 +401,9 @@ public class SettlementServiceImpl implements SettlementService {
             settlementItemMapper.insert(commissionItem);
         }
 
-        List<Long> orderIds = orders.stream().map(Order::getId).toList();
+        // 抽佣明细回溯账单：账单落库后回填 settlement_bill_id，便于「账单 → 抽佣明细」核对
+        bindCommissionRecords(bill.getId(), orderIds);
+
         int updated = orderMapper.update(null, new LambdaUpdateWrapper<Order>()
                 .in(Order::getId, orderIds)
                 .eq(Order::getSettlementStatus, 0)
@@ -405,6 +413,51 @@ public class SettlementServiceImpl implements SettlementService {
             throw new BizException(ErrorCode.SETTLEMENT_STATE_INVALID);
         }
         return bill.getId();
+    }
+
+    /**
+     * 抽佣费率来源：三级规则引擎（活动 > 商家 > 品类 > 全局默认），
+     * 引擎内部在无规则命中时回落 {@code app.settlement.default-commission-rate}（默认 0.0600），
+     * 并把 rule_id / rule_scope 记 NULL。抽佣金额只在这里算一次，落库后不再重算。
+     */
+    private CommissionResolveResult resolveCommission(Order order, long base) {
+        return commissionService.resolveAndRecord(order, base);
+    }
+
+    /**
+     * 抽佣明细回填结算单归属，便于「账单 → 抽佣明细」溯源核对。
+     */
+    private void bindCommissionRecords(Long billId, List<Long> orderIds) {
+        int bound = commissionService.bindSettlementBill(billId, orderIds);
+        log.debug("commission records bound billId={} rows={}", billId, bound);
+    }
+
+    /**
+     * 打款成功后记一条结算支出流水（flow_type = 2，direction = 2 出）。
+     *
+     * <p>取舍：流水与打款 <b>不在同一事务</b>。打款状态已通过条件更新落库，若此处失败只记
+     * error 日志、不回滚打款，避免「钱已经打了但事务回滚」的资损；流水侧靠
+     * {@code uk_biz(flow_type, biz_type, biz_id)} 幂等，补偿重试也不会重复记账。
+     */
+    private void recordSettlementExpense(Long billId) {
+        SettlementBill bill = settlementBillMapper.selectById(billId);
+        if (bill == null) {
+            // 数据一致性兜底：条件更新成功即代表账单存在，查不到只可能是脏数据；
+            // 打款已落库，此时抛异常会让调用方误以为可回滚，故只记告警。
+            log.warn("settlement bill missing after pay billId={}", billId);
+            return;
+        }
+        try {
+            fundFlowService.record(
+                    FlowType.SETTLEMENT_EXPENSE.getCode(),
+                    FundFlowService.BIZ_TYPE_SETTLEMENT_BILL,
+                    billId,
+                    FlowType.SETTLEMENT_EXPENSE.getDefaultDirection(),
+                    nz(bill.getPayableAmount()),
+                    "结算单 " + bill.getBillNo() + " 打款支出");
+        } catch (RuntimeException ex) {
+            log.error("settlement expense fund flow failed billId={}", billId, ex);
+        }
     }
 
     private SettlementBillView toBillView(SettlementBill bill) {
