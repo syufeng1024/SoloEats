@@ -24,5 +24,5 @@ dist/
 data/
 target-mvn/
 
-# WorkBuddy 本地会话记忆（不入库，仅本地）
-.workbuddy/memory/
+# WorkBuddy 本地会话数据（记忆 / 技能 / 临时产物，不入库，仅本地）
+.workbuddy/
