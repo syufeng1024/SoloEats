@@ -21,6 +21,7 @@ import com.soloeats.product.support.JsonTexts;
 import com.soloeats.product.support.ProductProperties;
 import com.soloeats.product.support.ProductTexts;
 import com.soloeats.store.service.ShopService;
+import com.soloeats.store.service.view.ShopView;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -153,6 +154,53 @@ public class ProductReviewServiceImpl implements ProductReviewService {
                 .eq(ProductReview::getUserId, userId)
                 .orderByDesc(ProductReview::getCreatedAt)
                 .orderByDesc(ProductReview::getId);
+        return pageOf(wrapper, pageNum, pageSize);
+    }
+
+    @Override
+    public PageResult<ReviewView> merchantPage(Long merchantId, Integer scoreLevel,
+                                               Integer replyStatus, long pageNum, long pageSize) {
+        if (merchantId == null || merchantId <= 0L) {
+            throw new BizException(ErrorCode.AUTH_FORBIDDEN, "令牌缺少 merchantId");
+        }
+        if (scoreLevel != null && (scoreLevel < 1 || scoreLevel > 3)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "scoreLevel 只能是 1差评/2中评/3好评");
+        }
+        if (replyStatus != null && replyStatus != 0 && replyStatus != 1) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "replyStatus 只能是 0未回复/1已回复");
+        }
+
+        // 评价表只有 shopId，没有 merchantId：先取商家全部门店，再按 shopId 过滤。
+        List<Long> shopIds = shopService.listByMerchant(merchantId, null).stream()
+                .map(ShopView::id)
+                .toList();
+        if (shopIds.isEmpty()) {
+            return PageResult.of(List.of(), 0L,
+                    pageNum < 1L ? 1L : pageNum,
+                    pageSize < 1L ? DEFAULT_PAGE_SIZE : Math.min(pageSize, MAX_PAGE_SIZE));
+        }
+
+        LambdaQueryWrapper<ProductReview> wrapper = new LambdaQueryWrapper<ProductReview>()
+                .in(ProductReview::getShopId, shopIds)
+                // 未审核评价不可回复，商家列表只展示审核通过的
+                .eq(ProductReview::getStatus, REVIEW_APPROVED);
+        if (scoreLevel != null) {
+            if (scoreLevel == 1) {
+                wrapper.le(ProductReview::getOverallScore, 2);
+            } else if (scoreLevel == 2) {
+                wrapper.eq(ProductReview::getOverallScore, 3);
+            } else {
+                wrapper.ge(ProductReview::getOverallScore, 4);
+            }
+        }
+        if (replyStatus != null) {
+            if (replyStatus == 0) {
+                wrapper.isNull(ProductReview::getMerchantReply);
+            } else {
+                wrapper.isNotNull(ProductReview::getMerchantReply);
+            }
+        }
+        wrapper.orderByDesc(ProductReview::getCreatedAt).orderByDesc(ProductReview::getId);
         return pageOf(wrapper, pageNum, pageSize);
     }
 

@@ -50,6 +50,26 @@
       "style": {
         "navigationBarTitleText": "门店设置"
       }
+    },
+    {
+      "path": "pages/finance/Finance",
+      "style": {
+        "navigationBarTitleText": "财务结算",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/review/Review",
+      "style": {
+        "navigationBarTitleText": "评价管理",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/mine/Mine",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
     }
   ],
   "globalStyle": {

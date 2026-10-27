@@ -45,6 +45,22 @@
 
     <view v-if="scopeHint" class="home__scope-hint">{{ scopeHint }}</view>
 
+    <!-- 经营工具入口（非 tab 页，只能从工作台进入） -->
+    <view class="home__entries">
+      <view class="home__entry" @click="goFinance">
+        <text class="home__entry-icon">¥</text>
+        <text class="home__entry-label">财务结算</text>
+      </view>
+      <view class="home__entry" @click="goReview">
+        <text class="home__entry-icon">★</text>
+        <text class="home__entry-label">评价管理</text>
+      </view>
+      <view class="home__entry" @click="goMine">
+        <text class="home__entry-icon">我</text>
+        <text class="home__entry-label">我的</text>
+      </view>
+    </view>
+
     <!-- 数据卡：全部取 dashboard 接口，不在前端求和 -->
     <view class="home__stats">
       <view class="home__stat" @click="goOrderTab('pending')">
@@ -407,6 +423,18 @@ function goSetting(): void {
 
 function goVerify(): void {
   uni.navigateTo({ url: '/pages/pickup/Verify' })
+}
+
+function goFinance(): void {
+  uni.navigateTo({ url: '/pages/finance/Finance' })
+}
+
+function goReview(): void {
+  uni.navigateTo({ url: '/pages/review/Review' })
+}
+
+function goMine(): void {
+  uni.navigateTo({ url: '/pages/mine/Mine' })
 }
 
 /** 订单 Tab 通过本地存储传参（switchTab 不支持 query） */
@@ -820,5 +848,41 @@ function showConfirm(options: {
   margin-top: 2rpx;
   font-size: 20rpx;
   color: #7a8699;
+}
+
+.home__entries {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 14rpx;
+}
+
+.home__entry {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  padding: 14rpx 0;
+  border-radius: 10rpx;
+  background-color: #ffffff;
+  box-shadow: 0 2rpx 8rpx rgba(20, 35, 58, 0.05);
+}
+
+.home__entry-icon {
+  width: 38rpx;
+  height: 38rpx;
+  line-height: 38rpx;
+  text-align: center;
+  border-radius: 8rpx;
+  background-color: #fff1e6;
+  color: #e85d04;
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
+.home__entry-label {
+  font-size: 23rpx;
+  color: #33455f;
+  font-weight: 600;
 }
 </style>

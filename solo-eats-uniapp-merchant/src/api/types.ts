@@ -251,3 +251,133 @@ export interface SkuVO {
   stockVersion: number | null
   updatedAt: string | null
 }
+
+/**
+ * GET /merchant/settlements → SettlementBillView。
+ * status：0已生成 / 10待审核 / 20已审核 / 30已打款 / 40已驳回。
+ * 接口未下发 statusName，页面需本地映射（见 Finance.vue）。
+ */
+export interface SettlementBillVO {
+  billId: number
+  billNo: string
+  merchantId: number
+  shopId: number | null
+  /** LocalDate 序列化为 yyyy-MM-dd */
+  billDate: string | null
+  /** 以下金额均为分 */
+  grossAmount: number | null
+  merchantDiscount: number | null
+  platformDiscount: number | null
+  commissionBase: number | null
+  platformCommission: number | null
+  merchantAmount: number | null
+  performanceFee: number | null
+  refundAmount: number | null
+  status: number | null
+  createdAt: string | null
+}
+
+/** 接口按当前 status 筛选条件聚合，覆盖全部账单而非当前页 */
+export interface SettlementSummaryVO {
+  billCount: number
+  grossAmount: number
+  merchantAmount: number
+  platformCommission: number
+  payableAmount: number
+}
+
+export interface SettlementListVO {
+  bills: SettlementBillVO[]
+  summary: SettlementSummaryVO
+}
+
+export interface SettlementOrderVO {
+  orderId: number
+  orderNo: string
+  payAmount: number | null
+  goodsAmount: number | null
+  packagingFee: number | null
+  deliveryFee: number | null
+  merchantDiscount: number | null
+  platformDiscount: number | null
+  commissionAmount: number | null
+  merchantAmount: number | null
+  completedAt: string | null
+  settleEligibleAt: string | null
+}
+
+export interface SettlementItemVO {
+  itemId: number
+  orderId: number | null
+  /** 1货款 2佣金 3退款 4履约服务费 …（后端 SettlementItem.itemType） */
+  itemType: number | null
+  amount: number | null
+  remark: string | null
+}
+
+export interface SettlementDetailVO {
+  bill: SettlementBillVO
+  orders: SettlementOrderVO[]
+  items: SettlementItemVO[]
+}
+
+/** GET /merchant/reviews → ReviewView */
+export interface ReviewVO {
+  id: number
+  orderId: number | null
+  shopId: number | null
+  spuId: number | null
+  skuId: number | null
+  /** 匿名评价为 null */
+  userId: number | null
+  overallScore: number
+  tasteScore: number | null
+  packageScore: number | null
+  deliveryScore: number | null
+  content: string | null
+  images: string[] | null
+  tags: string[] | null
+  /** 0 否 / 1 是 */
+  anonymous: number | null
+  /** 0待审 / 1通过 / 2隐藏 */
+  status: number | null
+  topFlag: number | null
+  merchantReply: string | null
+  replyAt: string | null
+  appendContent: string | null
+  appendAt: string | null
+  createdAt: string | null
+}
+
+/** GET /merchant/profile → MerchantDetailView。legalIdCard 已脱敏 */
+export interface MerchantDetailVO {
+  id: number
+  merchantNo: string | null
+  merchantName: string
+  brandName: string | null
+  categoryId: number | null
+  contactName: string | null
+  contactPhone: string | null
+  contactEmail: string | null
+  businessLicenseNo: string | null
+  legalPerson: string | null
+  legalIdCard: string | null
+  province: string | null
+  city: string | null
+  district: string | null
+  address: string | null
+  /** 0草稿 1待审核 2已通过 3已驳回 4已停用 */
+  status: number | null
+  /** BigDecimal，如 0.1500 */
+  commissionRate: number | null
+  level: number | null
+  auditBy: number | null
+  auditAt: string | null
+  auditRemark: string | null
+  openedAt: string | null
+  remark: string | null
+  createdAt: string | null
+  updatedAt: string | null
+  qualifications: unknown[] | null
+  auditLogs: unknown[] | null
+}

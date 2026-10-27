@@ -18,6 +18,16 @@ public interface ProductReviewService {
 
     PageResult<ReviewView> mine(Long userId, long pageNum, long pageSize);
 
+    /**
+     * 商家端评价列表：覆盖该商家全部门店，只含审核通过（status=1）的评价，
+     * 与 reply 的前置条件保持一致。
+     *
+     * @param scoreLevel  1 差评(1~2 星) / 2 中评(3 星) / 3 好评(4~5 星)，null 不过滤
+     * @param replyStatus 0 未回复 / 1 已回复，null 不过滤
+     */
+    PageResult<ReviewView> merchantPage(Long merchantId, Integer scoreLevel, Integer replyStatus,
+                                        long pageNum, long pageSize);
+
     void reply(Long merchantId, Long reviewId, ReplyReviewCommand command);
 
     PageResult<ReviewView> adminPage(Long shopId, Long spuId, Long riderId, Integer status,
