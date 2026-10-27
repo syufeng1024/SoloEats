@@ -33,8 +33,8 @@ export function formatPercent(value: number | null | undefined): string {
 }
 
 /**
- * 经营总览的 refundRate / repurchaseRate 后端按 0~1 比例返回（0.0500 表示 5%），
- * 与另外三张报表口径不同，仅此处换算一次。
+ * 后端按 0~1 比例返回的字段使用此函数：
+ * 经营总览 refundRate / repurchaseRate、客服工单 solvedRate（0.0500 表示 5%）。
  */
 export function formatRatioPercent(value: number | null | undefined): string {
   if (value === null || value === undefined) {
