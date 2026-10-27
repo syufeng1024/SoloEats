@@ -226,7 +226,7 @@ public class SysNoticeServiceImpl implements SysNoticeService {
         if (roles.stream().anyMatch(role -> role != null && role.startsWith("MERCHANT"))) {
             return List.of(TARGET_ALL, TARGET_MERCHANT);
         }
-        if (roles.contains("RIDER")) {
+        if (roles.stream().anyMatch(role -> role != null && role.startsWith("RIDER"))) {
             return List.of(TARGET_ALL, TARGET_RIDER);
         }
         return List.of(TARGET_ALL);

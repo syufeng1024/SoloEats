@@ -97,6 +97,22 @@ public interface OrderMapper extends BaseMapper<Order> {
     int markRefunded(@Param("orderId") Long orderId,
                      @Param("amount") Long amount);
 
+    /**
+     * 售后期内对「已完成」订单退款（规格书 8.8）：订单保持 COMPLETED 终态，
+     * 只回写退款状态（2=全额）与退款金额。与 markRefunded（取消路径，status=70）区分，
+     * 同样以 status 作为条件更新，防止并发覆盖已流转的订单。
+     */
+    @Update("""
+            UPDATE t_order
+            SET refund_status = 2,
+                refunded_amount = #{amount},
+                updated_at = NOW(3)
+            WHERE id = #{orderId}
+              AND status = 60
+            """)
+    int markAfterSalesRefunded(@Param("orderId") Long orderId,
+                               @Param("amount") Long amount);
+
     @Update("""
             UPDATE t_order
             SET cancel_reason = #{reason},

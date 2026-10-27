@@ -5,6 +5,8 @@ import com.soloeats.common.exception.ErrorCode;
 import com.soloeats.common.idempotency.Idempotent;
 import com.soloeats.marketing.service.CouponLockResult;
 import com.soloeats.marketing.service.CouponService;
+import com.soloeats.marketing.service.DiscountApportioner;
+import com.soloeats.marketing.service.view.DiscountApportionItem;
 import com.soloeats.member.service.MemberAddressService;
 import com.soloeats.member.service.view.OrderAddressView;
 import com.soloeats.order.domain.entity.Order;
@@ -35,11 +37,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,6 +55,9 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class OrderApplicationService {
+
+    /** 规格书 9.8 保底：实付金额不得低于 0.01 元（= 1 分）。 */
+    private static final long MIN_PAY_AMOUNT = 1L;
 
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
@@ -86,12 +89,18 @@ public class OrderApplicationService {
 
         List<ItemDraft> drafts = new ArrayList<>();
         long goodsAmount = 0L;
+        long payableBase = 0L;
         for (Map.Entry<Long, Integer> entry : qtyBySku.entrySet()) {
             Sku sku = skuService.getRequired(entry.getKey(), command.shopId());
             try {
                 long originalAmount = Math.multiplyExact(sku.getPrice(), entry.getValue().longValue());
                 goodsAmount = Math.addExact(goodsAmount, originalAmount);
-                drafts.add(new ItemDraft(sku, entry.getValue(), originalAmount));
+                // 规格书 9.7 要求优惠按「商品折后金额」比例分摊。当前下单链路的行级优惠只有 SKU 售价
+                // （活动价 / 会员价尚未接入下单落库），因此行折后应付 = 行原价；
+                // 后续接入行级优惠时只需在此处扣减，分摊逻辑无需改动。
+                long linePayableAmount = originalAmount;
+                payableBase = Math.addExact(payableBase, linePayableAmount);
+                drafts.add(new ItemDraft(sku, entry.getValue(), originalAmount, linePayableAmount));
             } catch (ArithmeticException ex) {
                 throw new BizException(ErrorCode.PARAM_INVALID, "订单金额溢出");
             }
@@ -114,7 +123,11 @@ public class OrderApplicationService {
         order.setDiscountAmount(0L);
         order.setPlatformDiscount(0L);
         order.setMerchantDiscount(0L);
-        order.setPayAmount(goodsAmount + packagingFee + deliveryFee);
+        long baseAmount = sumAmount(goodsAmount, packagingFee, deliveryFee);
+        // 规格书 9.8 保底的第一道拦截：无任何优惠的基数已不足 0.01 元时，
+        // 后续折扣只会更低，直接拒绝，且不落库，避免留下永远无法支付的僵尸订单。
+        assertPayAmount(baseAmount);
+        order.setPayAmount(baseAmount);
         order.setRefundedAmount(0L);
         order.setAddressId(receiver.addressId());
         order.setReceiverName(receiver.receiverName());
@@ -139,24 +152,28 @@ public class OrderApplicationService {
             } else {
                 platformDiscount = discountAmount;
             }
-            long payAmount = goodsAmount + packagingFee + deliveryFee - discountAmount;
-            if (payAmount < 1L) {
-                throw new BizException(ErrorCode.PARAM_INVALID, "实付金额不能低于 0.01 元");
-            }
+        }
+
+        // 规格书 9.7「只允许服务端最终计算一次」+ 9.8「实付 ≥ 0.01 元」：
+        // 这是有折扣（券 / 满减 / 会员价 / 活动价）汇合后的唯一出口，
+        // 保底校验放在分支外，任何折扣路径都被同一次校验兜住。
+        long finalPayAmount = baseAmount - discountAmount;
+        assertPayAmount(finalPayAmount);
+        if (coupon != null) {
             order.setDiscountAmount(discountAmount);
             order.setPlatformDiscount(platformDiscount);
             order.setMerchantDiscount(merchantDiscount);
-            order.setPayAmount(payAmount);
+            order.setPayAmount(finalPayAmount);
             if (orderMapper.updateById(order) != 1) {
                 throw new BizException(ErrorCode.ORDER_CONCURRENT_MODIFIED);
             }
         }
 
-        Map<Long, Long> apportion = apportionDiscount(discountAmount, drafts, goodsAmount);
+        Map<Long, Long> apportion = apportionDiscount(discountAmount, drafts, payableBase);
         List<CreateOrderResult.ItemResult> itemResults = new ArrayList<>();
         for (ItemDraft draft : drafts) {
             long itemDiscount = apportion.getOrDefault(draft.sku().getId(), 0L);
-            long itemPayable = draft.originalAmount() - itemDiscount;
+            long itemPayable = draft.payableAmount() - itemDiscount;
 
             OrderItem item = new OrderItem();
             item.setOrderId(order.getId());
@@ -252,6 +269,32 @@ public class OrderApplicationService {
         return to;
     }
 
+    /**
+     * 金额求和（分）。溢出时按参数非法拒绝，避免 {@code long} 回绕出负数或异常小的金额。
+     */
+    private long sumAmount(long... parts) {
+        try {
+            long total = 0L;
+            for (long part : parts) {
+                total = Math.addExact(total, part);
+            }
+            return total;
+        } catch (ArithmeticException ex) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "订单金额溢出");
+        }
+    }
+
+    /**
+     * 实付保底校验（规格书 9.8：不允许 0 元或负数成交）。
+     *
+     * @param payAmount 服务端最终计算的实付金额（分）
+     */
+    private void assertPayAmount(long payAmount) {
+        if (payAmount < MIN_PAY_AMOUNT) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "实付金额不能低于 0.01 元");
+        }
+    }
+
     private void validate(CreateOrderCommand command) {
         if (command == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请求不能为空");
@@ -324,37 +367,54 @@ public class OrderApplicationService {
         }
     }
 
-    private Map<Long, Long> apportionDiscount(long discountAmount, List<ItemDraft> drafts, long goodsAmount) {
+    /**
+     * 优惠分摊：把一笔整单优惠按各项「折后应付金额」占比拆到明细上（规格书 9.7）。
+     *
+     * <p>不变量（由 {@link DiscountApportioner} 保证）：
+     * <ul>
+     *   <li>Σ分摊 == min(优惠总额, Σ折后应付)；</li>
+     *   <li>单项分摊 ≤ 该项折后应付，且不为负数；</li>
+     *   <li>余数逐分归入仍有余量的最大项，不再出现「优惠分摊失败」。</li>
+     * </ul>
+     *
+     * @param discountAmount 整单优惠总额（分），非正数表示无优惠
+     * @param drafts         订单明细草稿，{@code payableAmount()} 为行折后应付（分摊基数）
+     * @param payableBase    Σ折后应付（分），用于校验基数自洽
+     * @return skuId → 分摊优惠（分），顺序与 drafts 一致
+     */
+    private Map<Long, Long> apportionDiscount(long discountAmount, List<ItemDraft> drafts, long payableBase) {
         Map<Long, Long> result = new LinkedHashMap<>();
+        if (drafts.isEmpty()) {
+            // 明细为空说明上游校验失效，此处不静默吞掉优惠
+            if (discountAmount > 0L) {
+                throw new BizException(ErrorCode.PARAM_INVALID, "订单明细为空，无法分摊优惠");
+            }
+            return result;
+        }
+
+        List<DiscountApportionItem> items = new ArrayList<>(drafts.size());
+        long sumPayable = 0L;
+        for (ItemDraft draft : drafts) {
+            items.add(new DiscountApportionItem(draft.sku().getId(), draft.payableAmount(), 0L));
+            sumPayable = Math.addExact(sumPayable, draft.payableAmount());
+        }
+        if (sumPayable != payableBase) {
+            // 基数不自洽时继续分摊会算出错误明细金额，直接拒绝而不是取近似值
+            throw new BizException(ErrorCode.PARAM_INVALID, "优惠分摊基数不一致");
+        }
         if (discountAmount <= 0L) {
             for (ItemDraft draft : drafts) {
                 result.put(draft.sku().getId(), 0L);
             }
             return result;
         }
-
-        long allocated = 0L;
-        for (ItemDraft draft : drafts) {
-            long share = BigDecimal.valueOf(discountAmount)
-                    .multiply(BigDecimal.valueOf(draft.originalAmount()))
-                    .divide(BigDecimal.valueOf(goodsAmount), 0, RoundingMode.HALF_UP)
-                    .longValue();
-            share = Math.min(share, draft.originalAmount());
-            result.put(draft.sku().getId(), share);
-            allocated += share;
+        if (sumPayable <= 0L) {
+            // 没有可分摊的应付金额却存在优惠，属于数据异常
+            throw new BizException(ErrorCode.PARAM_INVALID, "没有可分摊的优惠金额");
         }
 
-        long remainder = discountAmount - allocated;
-        if (remainder > 0L) {
-            ItemDraft largest = drafts.stream()
-                    .max(Comparator.comparingLong(ItemDraft::originalAmount))
-                    .orElseThrow(() -> new BizException(ErrorCode.PARAM_INVALID, "订单明细为空"));
-            long current = result.getOrDefault(largest.sku().getId(), 0L);
-            long capacity = largest.originalAmount() - current;
-            if (capacity < remainder) {
-                throw new BizException(ErrorCode.PARAM_INVALID, "优惠分摊失败");
-            }
-            result.put(largest.sku().getId(), current + remainder);
+        for (DiscountApportionItem item : DiscountApportioner.apportion(items, discountAmount)) {
+            result.put(item.skuId(), item.discountAmount());
         }
         return result;
     }
@@ -371,7 +431,15 @@ public class OrderApplicationService {
         return "SO" + time + random;
     }
 
-    private record ItemDraft(Sku sku, int quantity, long originalAmount) {
+    /**
+     * 下单明细草稿。
+     *
+     * @param sku             SKU 快照
+     * @param quantity        购买数量
+     * @param originalAmount  行原价小计（分）
+     * @param payableAmount   行折后应付（分），优惠分摊基数
+     */
+    private record ItemDraft(Sku sku, int quantity, long originalAmount, long payableAmount) {
     }
 
     private record ReceiverInfo(

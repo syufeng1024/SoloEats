@@ -186,7 +186,7 @@ public class OperationLogAspect {
         if (roles.stream().anyMatch(role -> role != null && role.startsWith("MERCHANT"))) {
             return "MERCHANT";
         }
-        if (roles.contains("RIDER")) {
+        if (roles.stream().anyMatch(role -> role != null && role.startsWith("RIDER"))) {
             return "RIDER";
         }
         if (roles.contains("C_USER")) {

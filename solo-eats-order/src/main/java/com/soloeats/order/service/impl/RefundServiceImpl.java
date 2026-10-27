@@ -13,6 +13,7 @@ import com.soloeats.order.domain.entity.OrderDiscount;
 import com.soloeats.order.domain.entity.OrderItem;
 import com.soloeats.order.domain.entity.RefundItem;
 import com.soloeats.order.domain.entity.RefundOrder;
+import com.soloeats.order.domain.enums.FulfillmentType;
 import com.soloeats.order.domain.enums.OperatorType;
 import com.soloeats.order.domain.enums.OrderEvent;
 import com.soloeats.order.domain.enums.OrderStatus;
@@ -28,6 +29,8 @@ import com.soloeats.order.service.result.CancelResult;
 import com.soloeats.order.service.result.RefundResult;
 import com.soloeats.product.service.StockService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
@@ -39,9 +42,13 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RefundServiceImpl implements RefundService {
+
+    /** 售后期默认天数（配置项缺失或非法时的兜底，与 application.yml 默认值一致）。 */
+    private static final long DEFAULT_AFTER_SALES_DAYS = 7L;
 
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
@@ -54,6 +61,14 @@ public class RefundServiceImpl implements RefundService {
     private final PaymentGateway paymentGateway;
     private final DistributedLock distributedLock;
     private final TransactionTemplate transactionTemplate;
+
+    /**
+     * 售后期天数（规格书 8.8）：订单完成（送达 / 取餐）后 N 天内可申请售后。
+     * 与结算冻结共用 {@code app.order.after-sales-days}，默认 7 天；
+     * 非 final 字段不参与 {@code @RequiredArgsConstructor}，单元测试不注入时回落默认值 7。
+     */
+    @Value("${app.order.after-sales-days:7}")
+    private long afterSalesDays = 7L;
 
     @Override
     public RefundResult refund(Long orderId, String reason, String idempotencyKey) {
@@ -210,10 +225,21 @@ public class RefundServiceImpl implements RefundService {
             couponService.rollback(discount.getSourceId(), orderId);
         }
 
-        OrderStatus to = orderApplicationService.transit(orderId, transitionEvent, null,
-                operatorType, operatorId, transitionEvent.name() + ":" + orderId);
+        OrderStatus currentStatus = OrderStatus.fromCode(order.getStatus());
+        // 售后期内的售后：订单已处于终态（已完成），OrderStateMachine 不允许终态流转，
+        // 因此不调用 transit，避免把「已完成」回退成「已取消」；只回写退款金额，
+        // 退款凭证仍以 t_refund_order + t_refund_item 为准。
+        boolean afterSales = currentStatus.isTerminal();
+        OrderStatus to = currentStatus;
+        if (!afterSales) {
+            to = orderApplicationService.transit(orderId, transitionEvent, null,
+                    operatorType, operatorId, transitionEvent.name() + ":" + orderId);
+        }
         orderItemMapper.markAllRefunded(orderId);
-        if (orderMapper.markRefunded(orderId, amount) != 1) {
+        int refundedRows = afterSales
+                ? orderMapper.markAfterSalesRefunded(orderId, amount)
+                : orderMapper.markRefunded(orderId, amount);
+        if (refundedRows != 1) {
             throw new BizException(ErrorCode.ORDER_CONCURRENT_MODIFIED);
         }
 
@@ -240,12 +266,47 @@ public class RefundServiceImpl implements RefundService {
         }
     }
 
+    /**
+     * 可退状态判定。
+     *
+     * <p>规格书 8.8：除「待接单 / 备餐中」外，订单完成（送达 / 取餐）后在售后期内同样可申请售后，
+     * 因此 {@code COMPLETED} 在售后期内放行；商家拒单（{@code rejectOnly=true}）仍只允许待接单，
+     * 避免拒单语义被售后放宽。
+     */
     private void assertRefundable(Order order, boolean rejectOnly) {
         int status = order.getStatus();
+        boolean afterSales = !rejectOnly && Objects.equals(status, OrderStatus.COMPLETED.getCode());
         boolean allowed = Objects.equals(status, OrderStatus.WAIT_ACCEPT.getCode())
-                || (!rejectOnly && Objects.equals(status, OrderStatus.PREPARING.getCode()));
+                || (!rejectOnly && Objects.equals(status, OrderStatus.PREPARING.getCode()))
+                || afterSales;
         if (!allowed) {
             throw new BizException(ErrorCode.ORDER_STATUS_INVALID, "当前订单状态不允许退款");
+        }
+        if (afterSales) {
+            assertWithinAfterSalesWindow(order);
+        }
+    }
+
+    /**
+     * 售后期校验：完成时间 + 配置天数 ≥ 当前时间。
+     *
+     * <p>完成时间口径按规格书 8.8：自取单取「已取餐」时间（{@code picked_up_at}），
+     * 其余取 {@code completed_at}（送达 / 自取核销完成时由 markCompleted 写入）。
+     * 完成时间缺失说明数据异常，无法证明在售后期内，按超期拒绝，避免静默放大退款范围。
+     */
+    private void assertWithinAfterSalesWindow(Order order) {
+        LocalDateTime finishedAt = order.getCompletedAt();
+        if (Objects.equals(order.getFulfillmentType(), FulfillmentType.PICKUP.getCode())
+                && order.getPickedUpAt() != null) {
+            finishedAt = order.getPickedUpAt();
+        }
+        if (finishedAt == null) {
+            log.warn("已完成订单缺少完成时间，按超售后期拒绝退款 orderId={}", order.getId());
+            throw new BizException(ErrorCode.ORDER_STATUS_INVALID, "已超过售后期，无法申请退款");
+        }
+        long days = afterSalesDays <= 0L ? DEFAULT_AFTER_SALES_DAYS : afterSalesDays;
+        if (LocalDateTime.now().isAfter(finishedAt.plusDays(days))) {
+            throw new BizException(ErrorCode.ORDER_STATUS_INVALID, "已超过售后期，无法申请退款");
         }
     }
 
