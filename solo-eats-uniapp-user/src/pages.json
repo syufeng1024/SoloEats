@@ -66,6 +66,63 @@
       "style": {
         "navigationBarTitleText": "评价"
       }
+    },
+    {
+      "path": "pages/search/Search",
+      "style": {
+        "navigationBarTitleText": "搜索"
+      }
+    },
+    {
+      "path": "pages/search/Result",
+      "style": {
+        "navigationBarTitleText": "搜索结果",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/search/Filter",
+      "style": {
+        "navigationBarTitleText": "筛选"
+      }
+    },
+    {
+      "path": "pages/search/History",
+      "style": {
+        "navigationBarTitleText": "搜索历史"
+      }
+    },
+    {
+      "path": "pages/message/List",
+      "style": {
+        "navigationBarTitleText": "消息中心",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/message/Detail",
+      "style": {
+        "navigationBarTitleText": "消息详情"
+      }
+    },
+    {
+      "path": "pages/message/Sessions",
+      "style": {
+        "navigationBarTitleText": "会话列表",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/message/Chat",
+      "style": {
+        "navigationBarTitleText": "会话"
+      }
+    },
+    {
+      "path": "pages/message/Settings",
+      "style": {
+        "navigationBarTitleText": "消息设置"
+      }
     }
   ],
   "globalStyle": {
