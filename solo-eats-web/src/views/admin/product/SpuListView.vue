@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { Refresh, Search } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { getCategoryTree, listSpus } from '@/api/product'
 import type { CategoryNode, SpuView } from '@/api/types'
 import {
@@ -13,6 +14,8 @@ import { debounce } from '@/utils/debounce'
 import { formatYuan } from '@/utils/money'
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50]
+
+const router = useRouter()
 
 const loading = ref(false)
 const loadError = ref('')
@@ -122,6 +125,19 @@ function categoryName(categoryId: number | null): string {
   return categoryNames.value[categoryId] ?? `品类 ${categoryId}`
 }
 
+function openCreate(): void {
+  void router.push({ name: 'admin-spu-create' })
+}
+
+/** 管理端没有单条详情接口，编辑页用 name 关键字回查，见 spu-form.vue。 */
+function openEdit(row: SpuView): void {
+  void router.push({
+    name: 'admin-spu-edit',
+    params: { id: row.id },
+    query: { name: row.spuName },
+  })
+}
+
 onMounted(async () => {
   await Promise.all([loadCategories(), load()])
 })
@@ -134,11 +150,15 @@ onMounted(async () => {
         <h2>商品库</h2>
         <p>
           数据源：<span class="mono">GET /api/v1/admin/spus</span>，权限码
-          <span class="mono">product:spu:list</span>。本批次只提供列表与筛选；
-          新建/编辑 SPU、门店商品上架属于后续批次页面。
+          <span class="mono">product:spu:list</span>。新建与编辑跳转
+          <span class="mono">/product/spu/new</span>、<span class="mono">/product/spu/{id}/edit</span>；
+          门店商品上架仍属于后续批次。
         </p>
       </div>
-      <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
+      <div class="toolbar">
+        <el-button type="primary" :icon="Plus" @click="openCreate">新建商品</el-button>
+        <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
+      </div>
     </div>
 
     <el-alert v-if="loadError" type="error" :closable="false" show-icon :title="loadError" />
@@ -234,6 +254,11 @@ onMounted(async () => {
         <el-table-column prop="monthSales" label="月售" width="70" align="right" />
         <el-table-column label="更新时间" width="150">
           <template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="80" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+          </template>
         </el-table-column>
 
         <template #empty>

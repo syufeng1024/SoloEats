@@ -94,3 +94,55 @@ export function getShopDetail(id: number): Promise<ShopDetailView> {
     method: 'GET',
   })
 }
+
+/** ShopGeoService.DeliveryAreaView.Point，坐标顺序与前端 lng/lat 一致 */
+export interface DeliveryAreaPoint {
+  lng: number
+  lat: number
+}
+
+/** ShopGeoService.DeliveryAreaView.java */
+export interface DeliveryAreaView {
+  id: number
+  /** 1圆形 2多边形 */
+  areaType: number
+  centerLng: number | null
+  centerLat: number | null
+  /** 圆形半径，单位米，后端限制 100~50000 */
+  radiusM: number | null
+  polygon: DeliveryAreaPoint[] | null
+  /** 0启用 1停用 */
+  status: number
+}
+
+/** SaveDeliveryAreaRequest.java */
+export interface SaveDeliveryAreaPayload {
+  areaType: 1 | 2
+  centerLng?: number | null
+  centerLat?: number | null
+  radiusM?: number | null
+  polygon?: DeliveryAreaPoint[] | null
+}
+
+/**
+ * GET /api/v1/admin/shops/{shopId}/delivery-area，权限码 store:shop:list。
+ * 门店没有启用的配送范围时后端抛 10002（RESOURCE_NOT_FOUND），不是空对象。
+ */
+export function getDeliveryArea(shopId: number): Promise<DeliveryAreaView> {
+  return request<DeliveryAreaView>({
+    url: `/v1/admin/shops/${shopId}/delivery-area`,
+    method: 'GET',
+  })
+}
+
+/** PUT /api/v1/admin/shops/{shopId}/delivery-area，权限码 store:shop:update */
+export function saveDeliveryArea(
+  shopId: number,
+  payload: SaveDeliveryAreaPayload,
+): Promise<DeliveryAreaView> {
+  return request<DeliveryAreaView>({
+    url: `/v1/admin/shops/${shopId}/delivery-area`,
+    method: 'PUT',
+    data: payload,
+  })
+}

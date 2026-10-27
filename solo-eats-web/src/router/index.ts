@@ -128,6 +128,44 @@ const router = createRouter({
           component: () => import('@/views/admin/product/SpuListView.vue'),
           meta: { roles: ['ADMIN'], title: '商品库' },
         },
+        // T17 批次 2/3 收尾：运营后台剩余 5 页。后端接口均已存在，未新增菜单种子，
+        // 菜单接口没有这些节点时由兜底菜单提供入口。
+        {
+          path: 'merchant/manage',
+          name: 'admin-merchant-manage',
+          component: () => import('@/views/merchant/list.vue'),
+          meta: { roles: ['ADMIN'], title: '商家列表' },
+        },
+        {
+          path: 'store/delivery-area',
+          name: 'admin-shop-delivery-area',
+          component: () => import('@/views/store/delivery-area.vue'),
+          meta: { roles: ['ADMIN'], title: '配送区域' },
+        },
+        {
+          path: 'product/spu/new',
+          name: 'admin-spu-create',
+          component: () => import('@/views/product/spu-form.vue'),
+          meta: { roles: ['ADMIN'], title: '新建商品' },
+        },
+        {
+          path: 'product/spu/:id/edit',
+          name: 'admin-spu-edit',
+          component: () => import('@/views/product/spu-form.vue'),
+          meta: { roles: ['ADMIN'], title: '编辑商品' },
+        },
+        {
+          path: 'delivery/dispatch',
+          name: 'admin-delivery-dispatch',
+          component: () => import('@/views/delivery/dispatch.vue'),
+          meta: { roles: ['ADMIN'], title: '派单中心' },
+        },
+        {
+          path: 'delivery/rider-audit',
+          name: 'admin-rider-audit',
+          component: () => import('@/views/delivery/rider-audit.vue'),
+          meta: { roles: ['ADMIN'], title: '骑手审核' },
+        },
         {
           path: 'marketing/coupon',
           name: 'admin-coupon',
