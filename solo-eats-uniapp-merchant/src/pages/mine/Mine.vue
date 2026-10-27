@@ -84,6 +84,16 @@
       </view>
     </view>
 
+    <!-- 消息中心 -->
+    <view class="mt-card mine__entry" @click="goMessage">
+      <view class="mine__entry-icon">消</view>
+      <view class="mine__entry-main">
+        <text class="mine__entry-title">消息中心</text>
+        <text class="mine__entry-desc">用户会话与平台通知</text>
+      </view>
+      <text class="mine__link">查看 ›</text>
+    </view>
+
     <!-- 账号 -->
     <view class="mt-card mine__card">
       <view class="mt-between mine__card-head">
@@ -257,6 +267,10 @@ function goShopSetting(): void {
   uni.navigateTo({ url: '/pages/shop/ShopSetting' })
 }
 
+function goMessage(): void {
+  uni.navigateTo({ url: '/pages/message/Message' })
+}
+
 function handleLogout(): void {
   uni.showModal({
     title: '退出登录',
@@ -409,6 +423,45 @@ function handleLogout(): void {
   font-size: 20rpx;
   color: #8d99aa;
   line-height: 1.6;
+}
+
+.mine__entry {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-top: 14rpx;
+}
+
+.mine__entry-icon {
+  flex: none;
+  width: 68rpx;
+  height: 68rpx;
+  line-height: 68rpx;
+  border-radius: 16rpx;
+  background-color: #fff1e6;
+  color: #e85d04;
+  font-size: 28rpx;
+  font-weight: 700;
+  text-align: center;
+}
+
+.mine__entry-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.mine__entry-title {
+  display: block;
+  font-size: 27rpx;
+  font-weight: 600;
+  color: #1b2432;
+}
+
+.mine__entry-desc {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 21rpx;
+  color: #8d99aa;
 }
 
 .mine__logout {

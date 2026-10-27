@@ -49,6 +49,16 @@
             <text>送达点</text>
           </view>
           <text class="detail__addr">{{ task.receiverAddress || '收货地址待更新' }}</text>
+
+          <view class="detail__addr-actions">
+            <view class="detail__nav-btn" @click="navigateToReceiver">
+              {{ receiverCoord ? '导航到收货点' : '复制收货地址' }}
+            </view>
+          </view>
+          <text v-if="!receiverCoord" class="detail__nav-tip">
+            当前接口未下发收货坐标，点击后复制地址，可在高德/腾讯地图 App 中粘贴搜索。
+          </text>
+
           <view class="detail__protect">
             收货人姓名与电话由平台保护，按地址送达即可。如需协助请联系平台客服。
           </view>
@@ -201,6 +211,29 @@ let clock: ReturnType<typeof setInterval> | null = null
 
 const items = computed(() => task.value?.items || [])
 
+/**
+ * 收货坐标：t_delivery_order 有 receiver_lng/lat，但 RiderDeliveryView 当前未下发，
+ * 接口恒为 null。保留这段读取逻辑，后端补齐字段后无需改页面即可启用系统地图。
+ */
+const receiverCoord = computed<{ lng: number; lat: number } | null>(() => {
+  const current = task.value
+  if (
+    !current ||
+    current.receiverLng === null ||
+    current.receiverLng === undefined ||
+    current.receiverLat === null ||
+    current.receiverLat === undefined
+  ) {
+    return null
+  }
+  const lng = Number(current.receiverLng)
+  const lat = Number(current.receiverLat)
+  if (!Number.isFinite(lng) || !Number.isFinite(lat) || lng === 0 || lat === 0) {
+    return null
+  }
+  return { lng, lat }
+})
+
 interface PromiseInfo {
   text: string
   className: string
@@ -318,6 +351,47 @@ function formatDistance(distanceM: number | null | undefined): string {
     return '--'
   }
   return meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`
+}
+
+/**
+ * 导航到收货点：
+ * - 有坐标 → uni.openLocation 调起系统地图（名称取收货地址）；
+ * - 无坐标（当前后端未下发）→ 复制地址并提示到地图 App 粘贴搜索，不伪造坐标。
+ */
+function navigateToReceiver(): void {
+  const address = (task.value?.receiverAddress || '').trim()
+  const coord = receiverCoord.value
+  if (coord) {
+    uni.openLocation({
+      longitude: coord.lng,
+      latitude: coord.lat,
+      name: '收货地址',
+      address,
+      scale: 18,
+      fail: () => copyReceiverAddress(address),
+    })
+    return
+  }
+  copyReceiverAddress(address)
+}
+
+function copyReceiverAddress(address: string): void {
+  if (!address) {
+    toast('收货地址为空，无法导航')
+    return
+  }
+  uni.setClipboardData({
+    data: address,
+    success: () => {
+      uni.showModal({
+        title: '已复制收货地址',
+        content: '当前接口未下发收货坐标，无法直接调起地图。请打开高德或腾讯地图 App 粘贴搜索。',
+        showCancel: false,
+        confirmText: '知道了',
+      })
+    },
+    fail: () => toast('复制失败，请手动记录地址'),
+  })
 }
 
 function showConfirm(options: {
@@ -656,6 +730,32 @@ async function submitAnomaly(): Promise<void> {
   line-height: 1.6;
   color: #33455f;
   word-break: break-all;
+}
+
+.detail__addr-actions {
+  display: flex;
+  margin-top: 18rpx;
+}
+
+.detail__nav-btn {
+  min-width: 240rpx;
+  height: 88rpx;
+  line-height: 88rpx;
+  padding: 0 32rpx;
+  border-radius: 12rpx;
+  background: linear-gradient(135deg, #ff9a3c, #ff7a00);
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 600;
+  text-align: center;
+}
+
+.detail__nav-tip {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 21rpx;
+  line-height: 1.6;
+  color: #8d99aa;
 }
 
 .detail__protect {

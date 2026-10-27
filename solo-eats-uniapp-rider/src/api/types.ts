@@ -71,6 +71,13 @@ export interface RiderTaskVO {
   pickupAddress: string | null
   receiverName: string | null
   receiverAddress: string | null
+  /**
+   * t_delivery_order.receiver_lng / receiver_lat 存在，但 RiderDeliveryView 当前未下发，
+   * 接口实际恒为 undefined。这里保留可选字段：后端补齐后详情页自动启用 uni.openLocation，
+   * 未补齐时按钮降级为「复制收货地址」。
+   */
+  receiverLng?: number | null
+  receiverLat?: number | null
   receiverPhoneMask: string | null
   distanceM: number | null
   deliveryFee: number | null

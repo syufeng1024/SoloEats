@@ -66,6 +66,19 @@
       }
     },
     {
+      "path": "pages/message/Message",
+      "style": {
+        "navigationBarTitleText": "消息中心",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/message/Chat",
+      "style": {
+        "navigationBarTitleText": "会话"
+      }
+    },
+    {
       "path": "pages/mine/Mine",
       "style": {
         "navigationBarTitleText": "我的"
