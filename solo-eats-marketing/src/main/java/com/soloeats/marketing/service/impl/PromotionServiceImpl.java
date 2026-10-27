@@ -6,24 +6,36 @@ import com.soloeats.marketing.domain.entity.Promotion;
 import com.soloeats.marketing.domain.entity.PromotionRule;
 import com.soloeats.marketing.mapper.PromotionMapper;
 import com.soloeats.marketing.mapper.PromotionRuleMapper;
+import com.soloeats.marketing.mapper.PromotionScopeMapper;
 import com.soloeats.marketing.service.DiscountApportioner;
 import com.soloeats.marketing.service.MarketingCalculateCommand;
 import com.soloeats.marketing.service.PromotionService;
 import com.soloeats.marketing.service.view.DiscountApportionItem;
 import com.soloeats.marketing.service.view.MarketingCalculateResult;
+import com.soloeats.marketing.service.view.PromotionAvailableView;
 import com.soloeats.marketing.service.view.PromotionHitRule;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
- * P0 版满减试算：平台级（bearer=1）、全平台（scopeType=1）、单档满减。
- * 阶梯/折扣/商家满减/秒杀在阶段A 补齐，本类不预埋。
+ * 满减/折扣试算引擎（阶段A）。
+ *
+ * <p>命中流程：候选活动（status=1、deleted=0、时间区间内，priority DESC）逐条判定
+ * 类型 → 时间 → 范围 → 券叠加开关 → 档位金额，取第一个算出正优惠的活动即停。
+ * 同一活动内由 {@code selectBestRule} 取达标的最大门槛档。
+ *
+ * <p>金额单位为分；折扣率用 BigDecimal + HALF_UP，全链路不出现 double/float。
  */
 @Slf4j
 @Service
@@ -31,14 +43,19 @@ import java.util.Objects;
 public class PromotionServiceImpl implements PromotionService {
 
     private static final int TYPE_FULL_REDUCTION = 1;
-    private static final int BEARER_PLATFORM = 1;
+    private static final int TYPE_DISCOUNT = 2;
     private static final int SCOPE_ALL_PLATFORM = 1;
+    private static final int SCOPE_MERCHANT = 2;
+    private static final int SCOPE_SHOP = 3;
+    private static final int SCOPE_CATEGORY = 4;
+    private static final int SCOPE_GOODS = 5;
     private static final int STATUS_ACTIVE = 1;
     private static final int STACKABLE_YES = 1;
     private static final long MIN_PAYABLE = 1L;
 
     private final PromotionMapper promotionMapper;
     private final PromotionRuleMapper promotionRuleMapper;
+    private final PromotionScopeMapper promotionScopeMapper;
 
     @Override
     public MarketingCalculateResult calculate(MarketingCalculateCommand command) {
@@ -49,6 +66,8 @@ public class PromotionServiceImpl implements PromotionService {
         LocalDateTime at = command.at() == null ? LocalDateTime.now() : command.at();
         List<MarketingCalculateCommand.MarketingItem> items =
                 command.items() == null ? List.of() : command.items();
+        // 商家归属只解析一次：C 端不传 merchantId 时由 shopId 反查，避免在候选循环里逐条查库。
+        Long merchantId = resolveMerchantId(command);
 
         // 分摊基数：有明细时不能超过明细合计，保证单项分摊不超过该行金额。
         long itemTotal = items.stream()
@@ -56,16 +75,19 @@ public class PromotionServiceImpl implements PromotionService {
                 .sum();
         long discountCap = items.isEmpty() ? goodsAmount : Math.min(goodsAmount, itemTotal);
 
+        Set<Long> skuIds = collectSkuIds(items);
+        List<Promotion> candidates = safeCandidates(at);
+        Set<Long> categoryIds = resolveCategoryIdsIfNeeded(candidates, skuIds);
+
         Promotion hitPromotion = null;
         PromotionRule hitRule = null;
         long discountAmount = 0L;
 
-        List<Promotion> candidates = promotionMapper.selectActivePlatformPromotions(at);
-        if (candidates == null) {
-            candidates = List.of();
-        }
         for (Promotion promotion : candidates) {
-            if (!isAvailable(promotion, at)) {
+            if (!matchBase(promotion) || !matchTime(promotion, at)) {
+                continue;
+            }
+            if (!matchScope(promotion, merchantId, command.shopId(), skuIds, categoryIds)) {
                 continue;
             }
             // 9.8：券与满减默认互斥，只有 stackable=1 才允许同单叠加。
@@ -74,18 +96,8 @@ public class PromotionServiceImpl implements PromotionService {
             }
             PromotionRule rule = promotionRuleMapper.selectBestRule(
                     promotion.getId(), goodsAmount);
-            if (rule == null) {
-                continue;
-            }
-            long threshold = rule.getThresholdAmount() == null ? 0L : rule.getThresholdAmount();
-            if (threshold > goodsAmount) {
-                continue;
-            }
-            long ruleDiscount = rule.getDiscountAmount() == null ? 0L : rule.getDiscountAmount();
-            if (ruleDiscount <= 0L) {
-                continue;
-            }
-            long applicable = Math.min(ruleDiscount, discountCap);
+            long applicable = Math.min(
+                    resolveDiscount(promotion.getPromotionType(), rule, goodsAmount), discountCap);
             if (applicable <= 0L) {
                 continue;
             }
@@ -113,8 +125,8 @@ public class PromotionServiceImpl implements PromotionService {
                     null, null, 0L, payableAmount, List.of(), List.of());
         }
 
-        log.debug("marketing calculate hit promotionId={} discount={} payable={}",
-                hitPromotion.getId(), discountAmount, payableAmount);
+        log.debug("marketing calculate hit promotionId={} type={} discount={} payable={}",
+                hitPromotion.getId(), hitPromotion.getPromotionType(), discountAmount, payableAmount);
         return new MarketingCalculateResult(
                 hitPromotion.getId(),
                 hitPromotion.getPromotionName(),
@@ -124,25 +136,197 @@ public class PromotionServiceImpl implements PromotionService {
                 List.of(PromotionHitRule.from(hitRule)));
     }
 
+    @Override
+    public List<PromotionAvailableView> listAvailable(Long shopId, List<Long> spuIds, LocalDateTime at) {
+        LocalDateTime effectiveAt = at == null ? LocalDateTime.now() : at;
+        List<Long> distinctSpuIds = normalizeSpuIds(spuIds);
+        Long merchantId = resolveMerchantIdByShop(shopId);
+
+        Set<Long> skuIds = distinctSpuIds.isEmpty()
+                ? Set.of()
+                : toLongSet(promotionScopeMapper.selectSkuIdsBySpuIds(distinctSpuIds));
+        Set<Long> categoryIds = skuIds.isEmpty()
+                ? Set.of()
+                : toLongSet(promotionScopeMapper.selectCategoryIdsBySkuIds(List.copyOf(skuIds)));
+
+        List<PromotionAvailableView> views = new ArrayList<>();
+        for (Promotion promotion : safeCandidates(effectiveAt)) {
+            if (!matchBase(promotion) || !matchTime(promotion, effectiveAt)) {
+                continue;
+            }
+            if (!matchScope(promotion, merchantId, shopId, skuIds, categoryIds)) {
+                continue;
+            }
+            views.add(PromotionAvailableView.from(
+                    promotion, promotionRuleMapper.selectByPromotionId(promotion.getId())));
+        }
+        return List.copyOf(views);
+    }
+
     /**
-     * SQL 已按同样条件过滤，这里再判一次：试算被直接调用时也不受调用方数据源影响，
-     * 单测可覆盖未开始/已结束分支。
+     * 基础过滤：只参与满减(1)/折扣(2)、进行中、未删除。SQL 已按 status/deleted 过滤，
+     * 这里再判一次，试算被直接调用时也不受查询条件影响。
      */
-    private boolean isAvailable(Promotion promotion, LocalDateTime at) {
+    private boolean matchBase(Promotion promotion) {
         if (promotion == null || promotion.getId() == null) {
             return false;
         }
-        if (!Objects.equals(promotion.getPromotionType(), TYPE_FULL_REDUCTION)
-                || !Objects.equals(promotion.getBearer(), BEARER_PLATFORM)
-                || !Objects.equals(promotion.getScopeType(), SCOPE_ALL_PLATFORM)
-                || !Objects.equals(promotion.getStatus(), STATUS_ACTIVE)
-                || Objects.equals(promotion.getDeleted(), 1)) {
-            return false;
-        }
+        Integer promotionType = promotion.getPromotionType();
+        boolean supportedType = Objects.equals(promotionType, TYPE_FULL_REDUCTION)
+                || Objects.equals(promotionType, TYPE_DISCOUNT);
+        return supportedType
+                && Objects.equals(promotion.getStatus(), STATUS_ACTIVE)
+                && !Objects.equals(promotion.getDeleted(), 1);
+    }
+
+    private boolean matchTime(Promotion promotion, LocalDateTime at) {
         return promotion.getStartAt() != null
                 && promotion.getEndAt() != null
                 && !at.isBefore(promotion.getStartAt())
                 && !at.isAfter(promotion.getEndAt());
+    }
+
+    /**
+     * 范围判定。merchantId/shopId 为 null 表示调用方没有该维度上下文，
+     * 对应范围的活动无法判定，按不可用处理；skuIds/categoryIds 为空同理。
+     */
+    private boolean matchScope(Promotion promotion, Long merchantId, Long shopId,
+                               Set<Long> skuIds, Set<Long> categoryIds) {
+        Integer scopeType = promotion.getScopeType();
+        if (scopeType == null) {
+            return false;
+        }
+        return switch (scopeType) {
+            case SCOPE_ALL_PLATFORM -> true;
+            case SCOPE_MERCHANT -> merchantId != null
+                    && Objects.equals(promotion.getMerchantId(), merchantId);
+            case SCOPE_SHOP -> shopId != null && Objects.equals(promotion.getShopId(), shopId);
+            case SCOPE_CATEGORY -> matchesCategory(promotion.getId(), categoryIds);
+            case SCOPE_GOODS -> matchesSku(promotion.getId(), skuIds);
+            default -> false;
+        };
+    }
+
+    private boolean matchesCategory(Long promotionId, Set<Long> categoryIds) {
+        if (categoryIds.isEmpty()) {
+            return false;
+        }
+        List<Long> scopeCategoryIds = promotionScopeMapper.selectScopeCategoryIds(promotionId);
+        return scopeCategoryIds != null && scopeCategoryIds.stream().anyMatch(categoryIds::contains);
+    }
+
+    private boolean matchesSku(Long promotionId, Set<Long> skuIds) {
+        if (skuIds.isEmpty()) {
+            return false;
+        }
+        List<Long> scopeSkuIds = promotionScopeMapper.selectScopeSkuIds(promotionId);
+        return scopeSkuIds != null && scopeSkuIds.stream().anyMatch(skuIds::contains);
+    }
+
+    /**
+     * 命中档位的优惠金额（分）。满减取档位金额；折扣按 goodsAmount×(1−rate) 四舍五入到分，
+     * 再按 maxDiscount 封顶。两种类型都要求 threshold ≤ goodsAmount。
+     * 折扣率缺失或不在 (0,1) 区间时该档作废，返回 0。
+     */
+    private long resolveDiscount(Integer promotionType, PromotionRule rule, long goodsAmount) {
+        if (rule == null) {
+            return 0L;
+        }
+        long threshold = rule.getThresholdAmount() == null ? 0L : rule.getThresholdAmount();
+        if (threshold > goodsAmount) {
+            return 0L;
+        }
+        if (Objects.equals(promotionType, TYPE_FULL_REDUCTION)) {
+            return rule.getDiscountAmount() == null ? 0L : rule.getDiscountAmount();
+        }
+        if (!Objects.equals(promotionType, TYPE_DISCOUNT)) {
+            return 0L;
+        }
+        BigDecimal rate = rule.getDiscountRate();
+        if (rate == null || rate.compareTo(BigDecimal.ZERO) <= 0
+                || rate.compareTo(BigDecimal.ONE) >= 0) {
+            return 0L;
+        }
+        long discount = BigDecimal.valueOf(goodsAmount)
+                .multiply(BigDecimal.ONE.subtract(rate))
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValueExact();
+        Long maxDiscount = rule.getMaxDiscount();
+        if (maxDiscount != null) {
+            discount = Math.min(discount, maxDiscount);
+        }
+        return discount;
+    }
+
+    private List<Promotion> safeCandidates(LocalDateTime at) {
+        List<Promotion> candidates = promotionMapper.selectCandidates(at);
+        return candidates == null ? List.of() : candidates;
+    }
+
+    /**
+     * merchantId 优先用调用方传入的；否则用 shopId 反查，保证 C 端不传 merchantId 也能命中商家满减。
+     * 反查结果为 null（门店不存在或已删除）时商家范围活动按「无法判定即跳过」处理，不报错。
+     */
+    private Long resolveMerchantId(MarketingCalculateCommand command) {
+        if (command.merchantId() != null) {
+            return command.merchantId();
+        }
+        return resolveMerchantIdByShop(command.shopId());
+    }
+
+    private Long resolveMerchantIdByShop(Long shopId) {
+        return shopId == null ? null : promotionMapper.selectMerchantIdByShop(shopId);
+    }
+
+    /**
+     * 只有存在指定品类活动且本次订单有 sku 时才反查品类，避免每次试算都多一次 JOIN。
+     */
+    private Set<Long> resolveCategoryIdsIfNeeded(List<Promotion> candidates, Set<Long> skuIds) {
+        if (skuIds.isEmpty()) {
+            return Set.of();
+        }
+        boolean needsCategory = candidates.stream()
+                .anyMatch(promotion -> Objects.equals(promotion.getScopeType(), SCOPE_CATEGORY));
+        if (!needsCategory) {
+            return Set.of();
+        }
+        return toLongSet(promotionScopeMapper.selectCategoryIdsBySkuIds(List.copyOf(skuIds)));
+    }
+
+    private Set<Long> collectSkuIds(List<MarketingCalculateCommand.MarketingItem> items) {
+        Set<Long> skuIds = new LinkedHashSet<>();
+        for (MarketingCalculateCommand.MarketingItem item : items) {
+            if (item != null && item.skuId() != null && item.skuId() > 0L) {
+                skuIds.add(item.skuId());
+            }
+        }
+        return skuIds;
+    }
+
+    private List<Long> normalizeSpuIds(List<Long> spuIds) {
+        if (spuIds == null || spuIds.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<Long> distinct = new LinkedHashSet<>();
+        for (Long spuId : spuIds) {
+            if (spuId != null && spuId > 0L) {
+                distinct.add(spuId);
+            }
+        }
+        return List.copyOf(distinct);
+    }
+
+    private Set<Long> toLongSet(List<Long> values) {
+        if (values == null || values.isEmpty()) {
+            return Set.of();
+        }
+        Set<Long> result = new HashSet<>(values.size());
+        for (Long value : values) {
+            if (value != null) {
+                result.add(value);
+            }
+        }
+        return result;
     }
 
     private void validate(MarketingCalculateCommand command) {
