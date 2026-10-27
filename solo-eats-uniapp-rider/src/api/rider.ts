@@ -1,15 +1,22 @@
 import { request } from './http'
 import type {
   DeliveryActionVO,
+  FaqVO,
   HallOrderVO,
+  ImSessionVO,
   IncomeDetailVO,
   IncomeOverviewVO,
   LoginVO,
   PageResult,
   PendingDispatchVO,
+  RiderAnomalyVO,
+  RiderAttendanceDayVO,
+  RiderBalanceVO,
   RiderCertStatusVO,
+  RiderStatsVO,
   RiderTaskItemVO,
   RiderTrackPointVO,
+  WithdrawOrderVO,
 } from './types'
 
 /**
@@ -225,6 +232,144 @@ export function fetchIncomeDetails(
     data.dateTo = query.dateTo
   }
   return request<PageResult<IncomeDetailVO>>({ url: '/v1/rider/income/details', data })
+}
+
+/* ------------------------------------------------------------------ */
+/* 提现                                                                */
+/* ------------------------------------------------------------------ */
+
+/** GET /rider/payouts/balance，可提现余额（分） */
+export function fetchWithdrawBalance(): Promise<RiderBalanceVO> {
+  return request<RiderBalanceVO>({ url: '/v1/rider/payouts/balance' })
+}
+
+export interface WithdrawApplyPayload {
+  /** 单位分 */
+  amount: number
+  /** 1支付宝 2银行卡 */
+  channel: number
+}
+
+/** POST /rider/payouts，返回新建提现单 */
+export function applyWithdraw(payload: WithdrawApplyPayload): Promise<WithdrawOrderVO> {
+  return request<WithdrawOrderVO>({
+    url: '/v1/rider/payouts',
+    method: 'POST',
+    data: {
+      amount: payload.amount,
+      channel: payload.channel,
+    },
+  })
+}
+
+export interface WithdrawQuery {
+  /** 0待审核 10审核通过 20打款中 30已到账 40已驳回 */
+  status?: number
+  pageNum?: number
+  pageSize?: number
+}
+
+/** GET /rider/payouts，按 id 倒序 */
+export function fetchWithdrawals(
+  query: WithdrawQuery = {},
+): Promise<PageResult<WithdrawOrderVO>> {
+  const data: Record<string, unknown> = {
+    pageNum: query.pageNum ?? 1,
+    pageSize: query.pageSize ?? 20,
+  }
+  if (query.status !== undefined && query.status !== null) {
+    data.status = query.status
+  }
+  return request<PageResult<WithdrawOrderVO>>({ url: '/v1/rider/payouts', data })
+}
+
+/* ------------------------------------------------------------------ */
+/* 评分、考勤、异常记录                                                */
+/* ------------------------------------------------------------------ */
+
+/** GET /rider/stats；onTimeRate 为百分比数值 0~100 */
+export function fetchRiderStats(): Promise<RiderStatsVO> {
+  return request<RiderStatsVO>({ url: '/v1/rider/stats' })
+}
+
+export interface AttendanceQuery {
+  /** yyyy-MM-dd，缺省为最近 7 天 */
+  dateFrom?: string
+  dateTo?: string
+}
+
+/** GET /rider/attendance，按日返回在线次数与估算在线分钟数 */
+export function fetchAttendance(
+  query: AttendanceQuery = {},
+): Promise<RiderAttendanceDayVO[]> {
+  const data: Record<string, unknown> = {}
+  if (query.dateFrom) {
+    data.dateFrom = query.dateFrom
+  }
+  if (query.dateTo) {
+    data.dateTo = query.dateTo
+  }
+  return request<RiderAttendanceDayVO[]>({ url: '/v1/rider/attendance', data })
+}
+
+export interface AnomalyQuery {
+  pageNum?: number
+  pageSize?: number
+}
+
+/** GET /rider/anomalies，本人上报记录，按 id 倒序 */
+export function fetchAnomalies(
+  query: AnomalyQuery = {},
+): Promise<PageResult<RiderAnomalyVO>> {
+  return request<PageResult<RiderAnomalyVO>>({
+    url: '/v1/rider/anomalies',
+    data: {
+      pageNum: query.pageNum ?? 1,
+      pageSize: query.pageSize ?? 20,
+    },
+  })
+}
+
+/* ------------------------------------------------------------------ */
+/* 帮助中心与客服                                                      */
+/* ------------------------------------------------------------------ */
+
+/** GET /c/faqs；该路径为白名单接口，骑手账号可直接访问 */
+export function fetchFaqs(keyword?: string): Promise<FaqVO[]> {
+  const data: Record<string, unknown> = {}
+  if (keyword) {
+    data.keyword = keyword
+  }
+  return request<FaqVO[]>({ url: '/v1/c/faqs', data })
+}
+
+export interface CreateImSessionPayload {
+  orderId?: number
+  /** 对端类型：2商家 3骑手 4客服 */
+  peerType: number
+  peerId: number
+}
+
+/**
+ * POST /im/sessions。
+ * 注意：后端 getOrCreate 对「商家/骑手/客服」主体只接受 peerType=1（对端必须是消费者），
+ * 骑手发起 peerType=4 的客服会话会被拒绝（10001）。Contact 页据此做降级展示。
+ */
+export function createImSession(payload: CreateImSessionPayload): Promise<ImSessionVO> {
+  const data: Record<string, unknown> = {
+    peerType: payload.peerType,
+    peerId: payload.peerId,
+  }
+  if (payload.orderId !== undefined && payload.orderId !== null) {
+    data.orderId = payload.orderId
+  }
+  return request<ImSessionVO>({
+    url: '/v1/im/sessions',
+    method: 'POST',
+    data,
+    // 骑手侧发起会被后端拒绝，静默交给 Contact 页做统一的降级提示
+    silent: true,
+  })
 }
 
 /**

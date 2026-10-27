@@ -47,6 +47,41 @@
 
       <view class="rd-divider" />
 
+      <view class="mine__item" @click="goWithdraw">
+        <text class="mine__item-label">申请提现</text>
+        <text class="mine__arrow">›</text>
+      </view>
+
+      <view class="rd-divider" />
+
+      <view class="mine__item" @click="goWithdrawList">
+        <text class="mine__item-label">提现记录</text>
+        <text class="mine__arrow">›</text>
+      </view>
+
+      <view class="rd-divider" />
+
+      <view class="mine__item" @click="goRating">
+        <text class="mine__item-label">我的评分</text>
+        <text class="mine__arrow">›</text>
+      </view>
+
+      <view class="rd-divider" />
+
+      <view class="mine__item" @click="goHelp">
+        <text class="mine__item-label">帮助中心</text>
+        <text class="mine__arrow">›</text>
+      </view>
+
+      <view class="rd-divider" />
+
+      <view class="mine__item" @click="goContact">
+        <text class="mine__item-label">联系客服</text>
+        <text class="mine__arrow">›</text>
+      </view>
+
+      <view class="rd-divider" />
+
       <view class="mine__item">
         <text class="mine__item-label">骑手编号</text>
         <text class="mine__item-value">{{ rider.riderNo || '--' }}</text>
@@ -142,6 +177,26 @@ function goCertStatus(): void {
 
 function goIncome(): void {
   uni.navigateTo({ url: '/pages/income/Income' })
+}
+
+function goWithdraw(): void {
+  uni.navigateTo({ url: '/pages/withdraw/Apply' })
+}
+
+function goWithdrawList(): void {
+  uni.navigateTo({ url: '/pages/withdraw/List' })
+}
+
+function goRating(): void {
+  uni.navigateTo({ url: '/pages/rating/Rating' })
+}
+
+function goHelp(): void {
+  uni.navigateTo({ url: '/pages/help/Help' })
+}
+
+function goContact(): void {
+  uni.navigateTo({ url: '/pages/help/Contact' })
 }
 
 function handleLogout(): void {

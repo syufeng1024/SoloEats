@@ -50,6 +50,57 @@
         "navigationBarTitleText": "我的收入",
         "enablePullDownRefresh": true
       }
+    },
+    {
+      "path": "pages/withdraw/Apply",
+      "style": {
+        "navigationBarTitleText": "申请提现"
+      }
+    },
+    {
+      "path": "pages/withdraw/List",
+      "style": {
+        "navigationBarTitleText": "提现记录",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/withdraw/Detail",
+      "style": {
+        "navigationBarTitleText": "提现详情"
+      }
+    },
+    {
+      "path": "pages/rating/Rating",
+      "style": {
+        "navigationBarTitleText": "我的评分",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/rating/RatingDetail",
+      "style": {
+        "navigationBarTitleText": "评分说明"
+      }
+    },
+    {
+      "path": "pages/help/Help",
+      "style": {
+        "navigationBarTitleText": "帮助中心",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/help/HelpDetail",
+      "style": {
+        "navigationBarTitleText": "问题详情"
+      }
+    },
+    {
+      "path": "pages/help/Contact",
+      "style": {
+        "navigationBarTitleText": "联系客服"
+      }
     }
   ],
   "globalStyle": {

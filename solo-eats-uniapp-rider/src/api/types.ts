@@ -146,6 +146,91 @@ export interface IncomeDetailVO {
   createdAt: string | null
 }
 
+/** 提现单状态：0待审核 / 10审核通过 / 20打款中 / 30已到账 / 40已驳回 */
+export const WITHDRAW_STATUS = {
+  PENDING: 0,
+  APPROVED: 10,
+  PAYING: 20,
+  ARRIVED: 30,
+  REJECTED: 40,
+} as const
+
+/** GET /rider/payouts/balance → RiderBalanceView，单位分 */
+export interface RiderBalanceVO {
+  availableBalance: number
+}
+
+/** GET /rider/payouts → PayoutView，金额单位分 */
+export interface WithdrawOrderVO {
+  id: number
+  payoutNo: string
+  subjectType: number
+  subjectId: number
+  amount: number
+  /** 1支付宝 2银行卡 */
+  channel: number
+  status: number
+  auditRemark: string | null
+  auditBy: number | null
+  auditAt: string | null
+  paidAt: string | null
+  createdAt: string | null
+}
+
+/** GET /rider/stats → RiderStatsView；onTimeRate 是百分比 0~100，不是 0~1 */
+export interface RiderStatsVO {
+  rating: number | null
+  onTimeRate: number | null
+  totalOrders: number | null
+  certStatus: number | null
+}
+
+/** GET /rider/attendance → RiderAttendanceDayView；minutes 为首末上线差值估算 */
+export interface RiderAttendanceDayVO {
+  date: string
+  onlineTimes: number | null
+  onlineMinutes: number | null
+}
+
+/** GET /rider/anomalies → RiderAnomalyView */
+export interface RiderAnomalyVO {
+  id: number
+  deliveryId: number
+  type: number
+  typeName: string
+  remark: string | null
+  imagesJson: string | null
+  createdAt: string | null
+}
+
+/** GET /c/faqs → FaqView（帮助中心白名单接口） */
+export interface FaqVO {
+  id: number
+  category: string
+  question: string
+  answer: string
+  sort: number | null
+  viewCount: number | null
+  status: number | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+/** POST /im/sessions → ImSessionView */
+export interface ImSessionVO {
+  id: number
+  sessionNo: string
+  orderId: number | null
+  userId: number
+  peerType: number
+  peerId: number
+  lastMessage: string | null
+  lastMessageAt: string | null
+  unread: number
+  status: number
+  createdAt: string
+}
+
 /** POST /auth/login → LoginResponse */
 export interface LoginVO {
   token: string

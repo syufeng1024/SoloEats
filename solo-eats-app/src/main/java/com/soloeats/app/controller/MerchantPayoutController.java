@@ -3,6 +3,7 @@ package com.soloeats.app.controller;
 import com.soloeats.app.dto.PayoutApplyRequest;
 import com.soloeats.app.security.CurrentReceiver;
 import com.soloeats.app.security.PermissionGuard;
+import com.soloeats.app.vo.RiderBalanceView;
 import com.soloeats.common.api.ApiResponse;
 import com.soloeats.common.api.PageResult;
 import com.soloeats.common.auth.AuthContext;
@@ -55,7 +56,7 @@ public class MerchantPayoutController {
     public ApiResponse<PayoutView> applyAsRider(@Valid @RequestBody PayoutApplyRequest request) {
         Long riderId = currentReceiver.receiverId(AuthContext.require());
         return ApiResponse.ok(payoutService.apply(
-                PayoutService.SUBJECT_TYPE_RIDER, riderId, request.amount(), null));
+                PayoutService.SUBJECT_TYPE_RIDER, riderId, request.amount(), request.channel()));
     }
 
     @RequireRole(Roles.RIDER)
@@ -67,5 +68,14 @@ public class MerchantPayoutController {
         Long riderId = currentReceiver.receiverId(AuthContext.require());
         return ApiResponse.ok(payoutService.pageMine(
                 PayoutService.SUBJECT_TYPE_RIDER, riderId, status, pageNum, pageSize));
+    }
+
+    /** 骑手可提现余额，口径为 PayoutService#availableBalance，单位分。 */
+    @RequireRole(Roles.RIDER)
+    @GetMapping("/api/v1/rider/payouts/balance")
+    public ApiResponse<RiderBalanceView> balanceAsRider() {
+        Long riderId = currentReceiver.receiverId(AuthContext.require());
+        return ApiResponse.ok(new RiderBalanceView(
+                payoutService.availableBalance(PayoutService.SUBJECT_TYPE_RIDER, riderId)));
     }
 }
