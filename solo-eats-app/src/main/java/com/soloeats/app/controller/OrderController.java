@@ -50,6 +50,28 @@ public class OrderController {
     private final PermissionGuard permissionGuard;
     private final OrderQueryService orderQueryService;
 
+    /**
+     * 用户端订单列表。前端 solo-eats-uniapp-user 的 api/order.ts 一直调 GET /v1/orders，
+     * 但本控制器此前只暴露 POST 动作，导致订单列表页 405。
+     */
+    @RequireRole(Roles.C_USER)
+    @GetMapping
+    public ApiResponse<PageResult<UserOrderView>> list(
+            @RequestParam(required = false) Integer status,
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        return ApiResponse.ok(orderQueryService.pageUserOrders(
+                AuthContext.require().userId(), status, pageNum, pageSize));
+    }
+
+    /** 用户端订单详情（含时间轴）；归属不符由服务层抛 10004。 */
+    @RequireRole(Roles.C_USER)
+    @GetMapping("/{orderId}")
+    public ApiResponse<UserOrderDetailView> detail(@PathVariable("orderId") Long orderId) {
+        return ApiResponse.ok(orderQueryService.getUserOrder(
+                AuthContext.require().userId(), orderId));
+    }
+
     @RequireRole(Roles.C_USER)
     @RateLimit(key = "order-create", limit = 20, windowSeconds = 60, dimension = RateLimitDimension.USER)
     @PostMapping
