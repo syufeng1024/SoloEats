@@ -5,7 +5,7 @@ import uni from '@dcloudio/vite-plugin-uni'
 export default defineConfig({
   plugins: [uni()],
   server: {
-    port: 5173,
+    port: 5175,
     proxy: {
       // 后端 Spring Boot 默认 8080；前端请求 baseURL 为 /api
       '/api': {
