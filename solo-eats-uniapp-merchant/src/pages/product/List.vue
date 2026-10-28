@@ -640,7 +640,13 @@ function showConfirm(title: string, content: string, confirmText: string): Promi
 .product {
   min-height: 100vh;
   background-color: #f2f4f7;
+  /* 底部原值（为页面底部操作区预留 150rpx + 安全区）保留作兜底 */
   padding-bottom: calc(150rpx + env(safe-area-inset-bottom));
+  /*
+   * 本页是 tab 页：在原有 150rpx 预留之上再叠加 fixed tabBar 高度。
+   * --window-bottom 在 H5 已含安全区，故与 env() 取较大者（max）而非相加，避免刘海机双算。
+   */
+  padding-bottom: calc(150rpx + max(var(--window-bottom, 0px), env(safe-area-inset-bottom)));
 }
 
 .product__toolbar {

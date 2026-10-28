@@ -291,6 +291,9 @@ function openDetail(order: MerchantOrderVO): void {
 .orders {
   min-height: 100vh;
   background-color: #f2f4f7;
+  /* 本页是 tab 页：为 H5 的 fixed tabBar 预留底部安全间距，避免最后一条订单被压住。
+     --window-bottom 在 H5 tab 页 = tabBar 高度（已含安全区），其余端 = 0，无副作用。 */
+  padding-bottom: calc(24rpx + var(--window-bottom, 0px));
 }
 
 .orders__tabs {

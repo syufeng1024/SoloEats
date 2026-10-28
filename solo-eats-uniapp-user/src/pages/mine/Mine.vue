@@ -78,9 +78,9 @@
       <view class="mine__grid-item is-disabled" @click="openCoupons">
         <view class="mine__grid-icon-wrap">
           <text class="mine__grid-icon">券</text>
-          <text class="mine__grid-badge">待开放</text>
         </view>
         <text class="mine__grid-text">优惠券</text>
+        <text class="mine__grid-badge">待开放</text>
       </view>
       <view class="mine__grid-item" @click="goHelp">
         <text class="mine__grid-icon">帮</text>
@@ -368,6 +368,10 @@ function goAbout(): void {
 .mine {
   min-height: 100vh;
   padding: 24rpx 24rpx 40rpx;
+  /* 同上：为 H5 的 fixed tabBar 预留底部安全间距，
+     否则末行「优惠券」下方的「待开放」标签会被 tabBar 压住（非 tab 页/小程序端 var 为 0，无副作用）。
+     上/左右内边距保持 24rpx 不变。 */
+  padding-bottom: calc(40rpx + var(--window-bottom, 0px));
   background: linear-gradient(180deg, #fff3e6 0%, #f5f5f7 320rpx);
 }
 
@@ -541,13 +545,16 @@ function goAbout(): void {
 }
 
 .mine__grid-icon-wrap {
-  position: relative;
+  /* 「待开放」标记已改为图标下方的独立一行（走正常文档流），不再需要绝对定位上下文；
+     这里仅保留块级包裹，保证 uni-text 图标色块尺寸稳定。 */
+  display: block;
 }
 
 .mine__grid-icon {
   /* uni-text 默认 inline，在 .mine__grid-icon-wrap（block）内 width/height 会失效，
-     导致「券」色块比兄弟图标小、且 wrap 被 line-height 撑高，badge 会跑到色块上方。
-     显式 block 化后色块回到 76×76，与其他格子一致，badge 也才能贴住色块右上角。 */
+     导致「券」色块比兄弟图标小、且 wrap 被 line-height 撑高。
+     显式 block 化后色块回到 76×76，与其他格子一致（此修复勿回退）。
+     「待开放」标记已改为下方独立一行，不再依赖色块定位。 */
   display: block;
   width: 76rpx;
   height: 76rpx;
@@ -561,10 +568,14 @@ function goAbout(): void {
 }
 
 .mine__grid-badge {
-  position: absolute;
-  top: 0;
-  right: 0;
-  transform: translate(35%, -45%);
+  /* 历史实现是绝对定位 + translate(35%, -45%)，标签会压在「券」色块右上角并越出格子。
+     现在改为图标与文案下方的第二行小标签：不与图标重叠、不越界，
+     宽度受 25% 格子约束（max-width:100%），极端窄屏用省略号兜底，
+     因此既不会挤占相邻格子，也不会产生横向滚动。 */
+  display: inline-block;
+  box-sizing: border-box;
+  max-width: 100%;
+  margin-top: 6rpx;
   padding: 0 8rpx;
   border-radius: 8rpx;
   background-color: #ff4d4f;
@@ -572,6 +583,8 @@ function goAbout(): void {
   font-size: 18rpx;
   line-height: 28rpx;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mine__grid-text {

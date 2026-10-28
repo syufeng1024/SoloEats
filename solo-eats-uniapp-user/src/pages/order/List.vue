@@ -333,6 +333,9 @@ function goHome(): void {
 .orders {
   min-height: 100vh;
   background-color: #f5f5f7;
+  /* 同 .se-page：为 H5 的 fixed tabBar 预留底部安全间距，避免最后一张订单卡被压住。
+     --window-bottom 在 H5 tab 页 = tabBar 高度，其余端 = 0，无副作用。 */
+  padding-bottom: calc(24rpx + var(--window-bottom, 0px));
 }
 
 .orders__tabs {

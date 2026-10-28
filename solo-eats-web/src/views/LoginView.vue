@@ -301,7 +301,13 @@ async function handleSubmit(): Promise<void> {
 
 .login-panel {
   display: flex;
-  align-items: center;
+  /*
+   * 不用 align-items: center：卡片高于可视区时它会上下同时溢出，
+   * 上半部分永远滚不到（小窗口下就是这个表现）。
+   * 改成 flex-start + 卡片 margin-block: auto —— 有剩余空间时自动居中，
+   * 空间不足时 auto 边距归零、卡片贴顶，内容整体可达。
+   */
+  align-items: flex-start;
   justify-content: center;
   padding: 40px 32px;
   background: #fff;
@@ -312,6 +318,8 @@ async function handleSubmit(): Promise<void> {
   width: 100%;
   max-width: 420px;
   border: none;
+  /* 配合父级 align-items: flex-start 实现「安全垂直居中」 */
+  margin: auto 0;
 }
 
 .login-card :deep(.el-card__body) {

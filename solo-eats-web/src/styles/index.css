@@ -18,10 +18,19 @@
   box-sizing: border-box;
 }
 
-html,
+html {
+  height: 100%;
+}
+
+/*
+ * body / #app 只能用 min-height：
+ * 写成 height: 100% 时容器被钉死在一屏高，内容超过视口也不会撑高，
+ * 页面就无法纵向滚动（登录页在窗口高度 < 600px 时登录按钮会被裁掉且滚不到）。
+ * min-height 既保留「整屏高」的观感，又允许内容把文档撑高。
+ */
 body,
 #app {
-  height: 100%;
+  min-height: 100vh;
   margin: 0;
 }
 

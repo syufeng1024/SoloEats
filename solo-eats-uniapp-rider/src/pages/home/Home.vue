@@ -584,7 +584,14 @@ function formatDistance(distanceM: number | null | undefined): string {
 
 <style scoped>
 .home {
+  /* 底部原值（安全区）保留作兜底 */
   padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+  /*
+   * 本页是 tab 页：再叠加 fixed tabBar 高度。--window-bottom 在 H5 已含安全区，
+   * 故与 env() 取较大者（max）而不是相加，避免刘海机双算；
+   * 上/左右内边距由 .rd-page 提供，此处不动。
+   */
+  padding-bottom: calc(40rpx + max(var(--window-bottom, 0px), env(safe-area-inset-bottom)));
 }
 
 .home__top {

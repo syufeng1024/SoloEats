@@ -289,6 +289,9 @@ function distanceText(distanceM: number | null): string {
 <style scoped>
 .home {
   padding-top: 20rpx;
+  /* 首页是 tab 页：显式再兜一层底部安全间距（值与 .se-page 一致），
+     防止后续有人给 .home 加 padding 简写时把 tabBar 留白覆盖掉。 */
+  padding-bottom: calc(24rpx + var(--window-bottom, 0px));
 }
 
 .home__top {
