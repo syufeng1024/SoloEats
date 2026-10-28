@@ -193,6 +193,9 @@ services:
       AUTH_MOCK_LOGIN_ENABLED: ${AUTH_MOCK_LOGIN_ENABLED:-true}
       AUTH_MOCK_SMS_ENABLED: ${AUTH_MOCK_SMS_ENABLED:-true}
       TENANT_ENABLED: ${TENANT_ENABLED:-true}
+      # OpenAPI 文档（/swagger-ui.html、/v3/api-docs）：本地默认开启方便调试，
+      # 生产必须设 API_DOC_ENABLED=false，否则 prod profile 下启动校验会直接失败
+      API_DOC_ENABLED: ${API_DOC_ENABLED:-true}
       # 密钥类：生产由密钥管理注入，禁止提交真实值
       # PII_KEY 为空会导致商家入驻写法人身份证/银行卡直接报错
       PII_KEY: ${PII_KEY:-}

@@ -77,6 +77,24 @@ class ProductionMockSwitchValidatorTest {
         assertThatCode(validator::afterPropertiesSet).doesNotThrowAnyException();
     }
 
+    @Test
+    @DisplayName("prod 下 API 文档开启时启动失败")
+    void prodRejectsEnabledApiDoc() {
+        ProductionMockSwitchValidator validator = validator(environment("prod"), false, false, false, "alipay", true);
+
+        assertThatThrownBy(validator::afterPropertiesSet)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("springdoc.api-docs.enabled");
+    }
+
+    @Test
+    @DisplayName("local 下 API 文档开启不影响启动")
+    void localAllowsEnabledApiDoc() {
+        ProductionMockSwitchValidator validator = validator(environment("local"), true, true, true, "mock", true);
+
+        assertThatCode(validator::afterPropertiesSet).doesNotThrowAnyException();
+    }
+
     private MockEnvironment environment(String profile) {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles(profile);
@@ -88,7 +106,17 @@ class ProductionMockSwitchValidatorTest {
                                                     boolean mockSmsEnabled,
                                                     boolean mockRechargeEnabled,
                                                     String paymentGateway) {
+        return validator(environment, mockLoginEnabled, mockSmsEnabled, mockRechargeEnabled,
+                paymentGateway, false);
+    }
+
+    private ProductionMockSwitchValidator validator(MockEnvironment environment,
+                                                    boolean mockLoginEnabled,
+                                                    boolean mockSmsEnabled,
+                                                    boolean mockRechargeEnabled,
+                                                    String paymentGateway,
+                                                    boolean apiDocEnabled) {
         return new ProductionMockSwitchValidator(environment, mockLoginEnabled, mockSmsEnabled,
-                mockRechargeEnabled, paymentGateway);
+                mockRechargeEnabled, paymentGateway, apiDocEnabled);
     }
 }

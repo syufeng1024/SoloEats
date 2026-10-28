@@ -23,6 +23,9 @@ import java.util.List;
  *   <li>{@code app.payment.gateway=mock}：模拟支付网关（仅在显式配置时校验）</li>
  * </ul>
  *
+ * <p>同时校验 OpenAPI 文档开关：生产环境暴露 Swagger UI 等于把全部接口契约、参数结构
+ * 与错误码对公网开放，因此 {@code springdoc.api-docs.enabled=true} 同样阻止启动。
+ *
  * <p>非生产 profile（local / dev / test）不做任何校验，保持本地开发体验不变。
  * 异常使用 {@link IllegalStateException}：这是启动期配置自检，不属于对外业务异常，
  * 不应进入 {@code GlobalExceptionHandler} 的 BizException 处理链路。
@@ -41,18 +44,21 @@ public class ProductionMockSwitchValidator implements InitializingBean {
     private final boolean mockSmsEnabled;
     private final boolean mockRechargeEnabled;
     private final String paymentGatewayMode;
+    private final boolean apiDocEnabled;
 
     public ProductionMockSwitchValidator(
             Environment environment,
             @Value("${app.auth.mock-login-enabled:true}") boolean mockLoginEnabled,
             @Value("${app.auth.mock-sms-enabled:true}") boolean mockSmsEnabled,
             @Value("${app.wallet.mock-recharge-enabled:true}") boolean mockRechargeEnabled,
-            @Value("${app.payment.gateway:}") String paymentGatewayMode) {
+            @Value("${app.payment.gateway:}") String paymentGatewayMode,
+            @Value("${springdoc.api-docs.enabled:false}") boolean apiDocEnabled) {
         this.environment = environment;
         this.mockLoginEnabled = mockLoginEnabled;
         this.mockSmsEnabled = mockSmsEnabled;
         this.mockRechargeEnabled = mockRechargeEnabled;
         this.paymentGatewayMode = paymentGatewayMode;
+        this.apiDocEnabled = apiDocEnabled;
     }
 
     @Override
@@ -67,6 +73,10 @@ public class ProductionMockSwitchValidator implements InitializingBean {
                 && MOCK_PAYMENT_GATEWAY.equalsIgnoreCase(paymentGatewayMode.trim())) {
             throw new IllegalStateException(
                     "生产环境禁止使用模拟支付通道：app.payment.gateway=mock，请切换到真实支付网关");
+        }
+        if (apiDocEnabled) {
+            throw new IllegalStateException(
+                    "生产环境禁止暴露 API 文档：springdoc.api-docs.enabled=true，请设置 API_DOC_ENABLED=false 后重启");
         }
     }
 
